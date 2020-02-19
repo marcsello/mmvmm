@@ -1,0 +1,3 @@
+python-etcd>=0.4.5
+marshmallow
+jsonplus
