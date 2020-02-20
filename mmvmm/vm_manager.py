@@ -69,7 +69,7 @@ class VMMAnager(object):
         except KeyError:
             raise UnknownCommandError()
 
-        result = func(**args)
+        result = func(vm, **args)  # TODO: The func should be an object member already
 
         if func.transformational:
             self._save(vm)

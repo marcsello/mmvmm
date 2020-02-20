@@ -1,44 +1,12 @@
 #!/usr/bin/env python3
 import subprocess
-from marshmallow import Schema, fields
-from marshmallow.validate import Regexp, Length
+
+from schema import VMDescriptionSchema
+from expose import ExposedClass, exposed, transformational
+from exception import VMRunningError, VMNotRunningError
 
 
-class VMDescriptionSchema(Schema):
-    name = fields.Str(validate=[Length(min=1, max=42), Regexp("^[a-z]+[a-z0-1]*$")])
-
-
-class VMMeta(type):
-    def __new__(meta, name, bases, dct):
-        exposed_functions = []
-
-        for key, value in dct.items():
-            if hasattr(value, 'exposed'):
-                exposed_functions.append(value)
-            else:
-                setattr(value, 'exposed', False)
-
-            if not hasattr(value, 'transformational'):
-                setattr(value, 'transformational', False)
-
-        dct['exposed_functions'] = exposed_functions
-
-        return super(VMMeta, meta).__new__(meta, name, bases, dct)
-
-
-def exposed(func):
-        func.exposed = True
-        return func
-
-
-def transformational(func):
-        func.transformational = True
-        return func
-
-
-class VM(object):
-
-    __metaclass__ = VMMeta
+class VM(ExposedClass):
 
     description_schema = VMDescriptionSchema(many=False)
 
@@ -52,15 +20,18 @@ class VM(object):
     @exposed
     @transformational
     def start(self):
-        pass
+        if self.is_running():
+            raise VMRunningError()
 
     @exposed
     def stop(self):
-        pass
+        if not self.is_running():
+            raise VMNotRunningError()
 
     @exposed
     def terminate(self):
-        pass
+        if not self.is_running():
+            raise VMNotRunningError()
 
     @exposed
     def get_name(self) -> str:
@@ -77,6 +48,10 @@ class VM(object):
     @exposed
     @transformational
     def update_description(self, description):
+
+        if self.is_running():
+            raise VMRunningError()
+
         self._description.update(
             self.description_schema.load(description, partial=True)
         )
