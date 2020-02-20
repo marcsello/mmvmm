@@ -2,6 +2,8 @@
 from vm import VM
 from objectstore import ObjectStore
 
+from exception import UnknownCommandError, UnknownVMError
+
 
 class VMMAnager(object):
 
@@ -34,6 +36,13 @@ class VMMAnager(object):
 
     ## PUBLIC ##
 
+    def close(self):
+        # TODO
+        pass
+
+    def get_list(self) -> list:
+        return list(self._vm_map.keys())
+
     def new(self, description):
         vm = VM(description)
         self._vms.append(vm)
@@ -49,9 +58,16 @@ class VMMAnager(object):
         self._rebuild_map()
 
     def execute_command(self, target: str, cmd: str, args: dict) -> object:
-        vm = self._vm_map[target]
 
-        func = vm.exposed_functions[cmd]
+        try:
+            vm = self._vm_map[target]
+        except KeyError:
+            raise UnknownVMError()
+
+        try:
+            func = vm.exposed_functions[cmd]
+        except KeyError:
+            raise UnknownCommandError()
 
         result = func(**args)
 
