@@ -6,14 +6,14 @@ class ExposedClassMeta(type):
         exposed_functions = {}
 
         for key, value in dct.items():
-            if hasattr(value, 'exposed'):
-                exposed_functions[key] = value
-            else:
-                if callable(value):
+            if callable(value):
+                if hasattr(value, 'exposed'):
+                    exposed_functions[key] = value
+                else:
                     setattr(value, 'exposed', False)
 
-            if not hasattr(value, 'transformational') and callable(value):
-                setattr(value, 'transformational', False)
+                if not hasattr(value, 'transformational'):
+                    setattr(value, 'transformational', False)
 
         dct['exposed_functions'] = exposed_functions
 

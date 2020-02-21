@@ -16,13 +16,7 @@ class QMPMonitor(Thread):
     def __init__(self):
         Thread.__init__(self)
 
-        matches = 0
-        while True:  # Amugy megvan az eselye, hogy ez a vegtelensegig porog
-            self._socket_path = os.path.join("/run", "mmvmm", "qmp_" + ''.join(random.choice(string.ascii_lowercase) for i in range(12 + matches)) + ".sock")
-            if os.path.exists(self._socket_path):
-                matches += 1
-            else:
-                break
+        self._socket_path = QMPMonitor._create_socket_path()
 
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._socket_fileio = None
@@ -32,6 +26,16 @@ class QMPMonitor(Thread):
 
         self._command_sender_lock = Lock()
         self._response_queue = queue.Queue(1)  # one element only, this is a thread safe class
+
+    @staticmethod
+    def _create_socket_path():
+        matches = 0
+        while True:
+            sock_path = os.path.join("/run", "mmvmm", "qmp_" + ''.join(random.choice(string.ascii_lowercase) for i in range(12 + matches)) + ".sock")
+            if os.path.exists(sock_path):
+                matches += 1
+            else:
+                return sock_path
 
     def __connect(self):
         self._socket.connect(self._socket_path)

@@ -69,6 +69,7 @@ class SocketCommandProvider(object):
                         logging.error("Connection dropped. Reason: {}".format(str(e)))
                         readable.close()
                         self._client_sockios.remove(readable)
+                        continue
 
                     def result_pusher(result: dict):
                         if readable:
@@ -101,7 +102,7 @@ class SimpleCommandExecuter(object):
             if not self._active:  # ha a socket closed, akkor az vissza fog térni none-al, a push command meg fasságot küld a geciba
                 break
 
-            if (not isinstance(cmd, dict)) or ('cmd' not in cmd) or ('args' not in cmd) or ('target' not in cmd):
+            if (not isinstance(cmd, dict)) or ('cmd' not in cmd) or ('args' not in cmd) or ('target' not in cmd):  # TODO: use schema
                 result_pusher(None)
                 continue
 
@@ -110,28 +111,13 @@ class SimpleCommandExecuter(object):
             logging.info("Executing command: {}".format(cmd['cmd']))
             try:
 
-                if cmd['target'] is None:
-
-                    if cmd['cmd'] == 'new':
-                        result = self._vmmanager.new(**cmd['args'])
-                    elif cmd['cmd'] == 'delete':
-                        result = self._vmmanager.delete(**cmd['args'])
-                    elif cmd['cmd'] == 'get_list':
-                        result = self._vmmanager.get_list(**cmd['args'])
-                    else:
-                        result_pusher({"success": False, "error": "Unknown command"})
-                        continue
-
-                else:
-                    result = self._vmmanager.execute_command(cmd['target'], cmd['cmd'], cmd['args'])
+                result = self._vmmanager.execute_command(
+                    cmd['target'],
+                    cmd['cmd'],
+                    cmd['args']
+                )
 
                 result_pusher({"success": True, "result": result})
-
-            except UnknownVMError:
-                result_pusher({"success": False, "error": "Unknown VM"})
-
-            except UnknownCommandError:
-                result_pusher({"success": False, "error": "Unknown command"})
 
             except Exception as e:
                 result_pusher({"success": False, "error": str(e)})

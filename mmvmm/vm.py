@@ -24,7 +24,7 @@ class VM(ExposedClass):
             raise VMRunningError()
 
     @exposed
-    def stop(self):
+    def poweroff(self):
         if not self.is_running():
             raise VMNotRunningError()
 

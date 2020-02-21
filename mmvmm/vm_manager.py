@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
+import logging
 from vm import VM
 from objectstore import ObjectStore
 
-from exception import UnknownCommandError, UnknownVMError
+from exception import UnknownCommandError, UnknownVMError, VMNotRunningError
+
+from expose import ExposedClass, exposed, transformational
+
+import time
 
 
-class VMMAnager(object):
+class VMMAnager(ExposedClass):
 
     def __init__(self, objectstore: ObjectStore):
         self._vms = []
@@ -23,7 +28,11 @@ class VMMAnager(object):
         descriptions = self._objectstore.get_prefix('/virtualmachines')
 
         for description in descriptions:
-            self.new(description)
+            logging.debug(f"Loading VM from description: {description}")
+            try:
+                self.new(description)
+            except Exception as e:
+                logging.error(f"Something went wrong while loading virtual machine {description['name'] if 'name' in description else 'UNKNOWN'}: {str(e)} - VM skipped!")
 
     def _save(self, vm: VM):
         description = vm.dump_description()
@@ -36,19 +45,49 @@ class VMMAnager(object):
 
     ## PUBLIC ##
 
-    def close(self):
-        # TODO
-        pass
+    def close(self, forced=False):
+        at_least_one_powered_on = False
+        for vm in self._vms:
+            try:
 
+                if forced:
+                    vm.terminate()
+                else:
+                    vm.poweroff()
+
+                at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
+            except VMNotRunningError:
+                pass
+
+        if at_least_one_powered_on:
+            logging.warning("Virtual machines are still running... Waiting for them to power off properly...")
+
+        while at_least_one_powered_on:
+            time.sleep(1)
+            at_least_one_powered_on = False
+            for vm in self._vms:
+                if vm.is_running():
+                    at_least_one_powered_on = True
+
+    @exposed
     def get_list(self) -> list:
         return list(self._vm_map.keys())
 
+    @exposed
+    @transformational
     def new(self, description):
         vm = VM(description)
+
+        if vm.get_name() in self._vm_map.keys():
+            raise KeyError("A virtual machine with this name already exists...")
+
         self._vms.append(vm)
         self._rebuild_map()
         self._save(vm)
+        logging.info(f"New virtual machine created: {vm.get_name()}")
 
+    @exposed
+    @transformational
     def delete(self, name: str):
         vm = self._vm_map[name]
         vm.destroy()  # If not allowed, this should raise an error
@@ -56,22 +95,33 @@ class VMMAnager(object):
         self._vms.remove(vm)
         self._objectstore.delete(f"/virtualmachines/{name}")
         self._rebuild_map()
+        logging.info(f"Virtual machine deleted: {name}")
 
     def execute_command(self, target: str, cmd: str, args: dict) -> object:
 
-        try:
-            vm = self._vm_map[target]
-        except KeyError:
-            raise UnknownVMError()
+        if not target:
+            try:
+                func = self.exposed_functions[cmd]
+            except KeyError:
+                raise UnknownCommandError()
 
-        try:
-            func = vm.exposed_functions[cmd]
-        except KeyError:
-            raise UnknownCommandError()
+            result = func(self, **args)
 
-        result = func(vm, **args)  # TODO: The func should be an object member already
+        else:
 
-        if func.transformational:
-            self._save(vm)
+            try:
+                vm = self._vm_map[target]
+            except KeyError:
+                raise UnknownVMError()
+
+            try:
+                func = vm.exposed_functions[cmd]
+            except KeyError:
+                raise UnknownCommandError()
+
+            result = func(vm, **args)  # TODO: The func should be an object member already
+
+            if func.transformational:
+                self._save(vm)
 
         return result
