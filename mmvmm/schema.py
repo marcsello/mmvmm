@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 
 from marshmallow import Schema, fields
-from marshmallow.validate import Regexp, Length, OneOf
+from marshmallow.validate import Regexp, Length, OneOf, Range
 
 
 class MediaDescriptionSchema(Schema):
     type = fields.Str(validate=OneOf(['hda', 'cdrom']))
-    path = fields.Str(validate=Regexp('^\/+[^\\0]+$'))
+    path = fields.Str(validate=Regexp('^\/+[^\\0]+$'))  # Only absolute path allowed
 
 
 class NICDesciptionSchema(Schema):
     model = fields.Str(validate=OneOf(['virtio', 'sungem', 'usb-net', 'rtl8139', 'pcnet']))
     mac = fields.Str(validate=Regexp('^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$'))
+    master = fields.Str(allow_none=False,)
 
 
 class VMHardwareDescriptionSchema(Schema):
-    cpu = fields.Int(validate=Length(min=1))  # Cpu SMP count
-    ram = fields.Int(validate=Length(min=1))  # MByte
+    cpu = fields.Int(validate=Range(min=1))  # Cpu SMP count
+    ram = fields.Int(validate=Range(min=1))  # MByte
     boot = fields.Str(validate=OneOf(['c', 'n', 'd']))
     rtc_utc = fields.Boolean()
 

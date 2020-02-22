@@ -29,7 +29,7 @@ class TAPDevice(object):
             self._masterdevname = None
 
             subprocess.check_call(["ip", "tuntap", "add", "name", self._devname, "mode", "tap"])
-            subprocess.check_call(f"iip link set {self._devname} up")
+            subprocess.check_call(["ip", "link", "set", self._devname, "up"])
 
             self.update_master(master)
 
@@ -40,7 +40,7 @@ class TAPDevice(object):
             raise RuntimeError("Device is no longer available")
 
         with _global_network_lock:
-            subprocess.check_call(f"ip link set {self._devname} master {master}")
+            subprocess.check_call(["ip", "link", "set", self._devname, "master", master])
             self._masterdevname = master
 
     @property
@@ -66,8 +66,8 @@ class TAPDevice(object):
             raise RuntimeError("Device is no longer available")
 
         with _global_network_lock:
-            subprocess.check_call(f"ip link set {self._devname} down")
-            subprocess.check_call(f"ip tuntap del name {self._devname} mode tap")
+            subprocess.check_call(["ip", "link", "set", "self._devname", "down"])
+            subprocess.check_call(["ip", "tuntap", "del", "name", self._devname, "mode", "tap"])
             NetworkBuilder._allocated_device_ids.remove(self._devid)
 
         self._active = False
