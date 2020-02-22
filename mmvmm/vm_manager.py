@@ -10,7 +10,7 @@ from expose import ExposedClass, exposed, transformational
 import time
 
 
-class VMMAnager(ExposedClass):
+class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
     def __init__(self, objectstore: ObjectStore):
         self._vms = []

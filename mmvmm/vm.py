@@ -5,6 +5,8 @@ from schema import VMDescriptionSchema
 from expose import ExposedClass, exposed, transformational
 from exception import VMRunningError, VMNotRunningError
 
+from tap_device import TAPDevice
+
 
 class VM(ExposedClass):
 
