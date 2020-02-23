@@ -8,7 +8,8 @@ import queue
 
 import logging
 
-# TODO: This module could use a LOT of work
+from bettersocket import BetterSocketIO
+from utils import JSONSocketWrapper
 
 
 class QMPMonitor(Thread):
@@ -19,13 +20,15 @@ class QMPMonitor(Thread):
         self._socket_path = QMPMonitor._create_socket_path()
 
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._socket_fileio = None
+        self._jsonsock = None
 
-        self._active = True
-        self._online = False
+        self._active = True  # Exit condition for the reading loop
+        self._online = False  # Became true when the QMP connection is negotiated
 
         self._command_sender_lock = Lock()
         self._response_queue = queue.Queue(1)  # one element only, this is a thread safe class
+
+        self._event_listeners = {}
 
     @staticmethod
     def _create_socket_path():
@@ -37,54 +40,42 @@ class QMPMonitor(Thread):
             else:
                 return sock_path
 
-    def __connect(self):
+    def _connect(self):
         self._socket.connect(self._socket_path)
-        self._socket_fileio = self._socket.makefile()
+        self._jsonsock = JSONSocketWrapper(BetterSocketIO(self._socket))
 
-    def __recieve_json(self):  # throws: JSON error
-        data_raw = self._socket_fileio.readline()  # Idea stolen from here: https://git.qemu.org/?p=qemu.git;a=blob;f=scripts/qmp/qmp.py;h=5c8cf6a05658979ce235c53bdf0a3064f5e00d09;hb=HEAD
+    def _negotiation(self):  # returns: bool successful negotiation
 
-        if data_raw:
-            return json.loads(data_raw)
-        else:
-            return None
-
-    def __send_json(self, data):
-        data_raw = json.dumps(data).encode('utf-8')
-        return self.__socket.sendall(data_raw)  # should raise exception
-
-    def __negotiation(self):  # returns: bool successful negotiation
-
-        banner = self.__recieve_json()
+        banner = self._jsonsock.recv_json()
 
         if not "QMP" in banner:
             return False
 
-        self.__send_json({"execute": "qmp_capabilities"})
+        self._jsonsock.send_json({"execute": "qmp_capabilities"})
 
-        response = self.__recieve_json()
+        response = self._jsonsock.recv_json()
 
         return "return" in response
 
     def get_sock_path(self):
-        return self.__socket_path
+        return self._socket_path
 
-    def disconnect(self, cleanup=False):
+    def disconnect(self, cleanup: bool = False):
         self._active = False
-        self.__socket.close()
+        self._socket.close()
 
-        if cleanup and os.path.exists(self.__socket_path):  # useful when using SIGKILL on QEMU
-            os.remove(self.__socket_path)
+        if cleanup and os.path.exists(self._socket_path):  # useful when using SIGKILL on QEMU
+            os.remove(self._socket_path)
 
     def run(self):
         # connect
 
-        retries = 5
-        connected = False
+        retries = 5  # Only retries if the socket is not present
+        connected = False  # Becomes true when the connection is established
         while self._active:  # wait for qemu
             time.sleep(2)
             try:
-                self.__connect()
+                self._connect()
                 connected = True
                 break  # no exception raised during connect
 
@@ -92,13 +83,13 @@ class QMPMonitor(Thread):
 
                 retries -= 1
                 if retries == 0:
-                    logging.log(logging.ERROR, "Couldn't connect to QMP after 5 attempts")
+                    logging.error("Couldn't connect to QMP after 5 attempts")
                     return
                 else:
-                    logging.log(logging.DEBUG, "Failed to connect to QMP. Retrying...")
+                    logging.debug("Failed to connect to QMP. Retrying...")
 
-            except ConnectionRefusedError:  # The socket is there... but it refuses connection... probably QEMU crashed or something
-                logging.log(logging.ERROR, "Connection refused while connecting to QMP (vm crashed?)")
+            except ConnectionRefusedError:  # The socket is there... but it refuses connection... probably QEMU crashed or something. Returning unconditionally
+                logging.error("Connection refused while connecting to QMP (vm crashed?)")
                 return
 
         if not connected:  # probably active turned to false
@@ -106,12 +97,12 @@ class QMPMonitor(Thread):
 
         # negotiate
 
-        if not self.__negotiation():
-            logging.log(logging.ERROR, "Negotiation failed with QMP protocol on: " + self.__socket_path)
-            self.__socket.close()
+        if not self._negotiation():
+            logging.warning(f"Negotiation failed with QMP protocol on: {self._socket_path}")
+            self._socket.close()
             return
         else:
-            logging.log(logging.DEBUG, "Negotiated with QMP")
+            logging.debug("Negotiated with QMP")
 
         # run
         # from now on, this thread simply functions as a reciever thread for the issued commands
@@ -120,51 +111,69 @@ class QMPMonitor(Thread):
 
         while self._active:
 
-            data = self.__recieve_json()
-
-            if not data:  # None indicates closed stuff
+            try:
+                data = self._jsonsock.recv_json()
+            except (BrokenPipeError, OSError):  # Socket is closed unexpectedly
                 break
 
-            if "event" in data:  # we are going to ignore those for now
-                logging.log(logging.DEBUG, "QMP event happened: " + data['event'])
+            except (json.JSONDecodeError, UnicodeError):
+                logging.warning("Malformed QMP message received!")
+                continue
+
+            if not data:
+                continue
+
+            if "event" in data:
+                event = data['event']
+                logging.debug(f"QMP event happened: {event}")
+
+                if event in self._event_listeners.keys():
+                    self._event_listeners[event](data['data'])
 
             elif "return" in data:
-                logging.log(logging.DEBUG, "QMP command successful")
-                self.__response_queue.put(data)  # this also signals the thread to continue, and also blocks this thread if the previous response is not processed yet
+                logging.debug("QMP command successful")
+                self._response_queue.put(data)  # this also signals the thread to continue, and also blocks this thread if the previous response is not processed yet
 
             elif "error" in data:
-                logging.log(logging.ERROR, "QMP command returned error: " + data['error']['class'])
-                self.__response_queue.put(data)
+                logging.error(f"QMP command returned error: {data['error']['class']}")
+                self._response_queue.put(data)
 
             else:
-                logging.log(logging.WARNING, "Unknown QMP message recieved")
+                logging.warning("Unknown QMP message recieved")
 
-            # so we ignore everything
-
-        # not run
+        # active became false:
 
         self._online = False
-        self.__socket.close()
+        self._socket.close()
 
-        logging.log(logging.DEBUG, "QMP session closed")
+        logging.debug("QMP session closed")
         self._active = False
 
-    def qmp_is_online(self):
+    def is_online(self):
         return self._online  # changing this is atomic, thus not requiring a lock
 
-    def qmp_send_command(self, cmd, _timeout=None):  # this should be used internally BUT only for user command (not negotiating and stuff)
-        # we must ensure that only one command is processed at a given moment, so that any response the reciever thread recieves is belongs to this command
-        # This method should never be called from the reviecer thread, because that might cause dead lock!
+    def send_command(self, cmd: dict, _timeout: float = None):
+        """
+        This function sends a command to the QMP and waits it's response.
+        """
 
-        with self.__command_sender_lock:
+        with self._command_sender_lock:
 
-            if not self._online:  # this also prevents invoking this command, while the thread is dead (only if it was closed gracefully)
-                raise ConnectionError()
+            if not self._online:  # this is moved inside the locked area to ensure that if a command caused QMP to disconnect, others waiting for the lock will fail
+                raise ConnectionError("QMP is offline")
 
-            self.__send_json(cmd)
+            self._jsonsock.send_json(cmd)
 
             try:
-                return self.__response_queue.get(timeout=_timeout)
+                return self._response_queue.get(timeout=_timeout)
 
             except Queue.Empty:  # there was no response
                 return None
+
+    def register_event_listener(self, event: str, listener: callable):  # Event handlers should return quickly, not to halt the thread
+        """
+        Register callable objects to be called when a QMP event occours. 
+        
+        Events are called from the reciever thread, so they should not be long-running
+        """
+        self._event_listeners[event] = listener
