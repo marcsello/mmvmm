@@ -7,7 +7,7 @@ import json
 class JSONSocketWrapper(object):
 
     def __init__(self, bsocket: BetterSocketIO):
-        self._bsocket = socket
+        self._bsocket = bsocket
 
     def send_json(self, data: object):
         self._bsocket.sendframe(json.dumps(data).encode('utf-8'))

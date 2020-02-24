@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import subprocess
+import logging
 from schema import VMDescriptionSchema
 from expose import ExposedClass, exposed, transformational
 from exception import VMRunningError, VMNotRunningError
@@ -16,7 +17,7 @@ class VM(ExposedClass):
     description_schema = VMDescriptionSchema(many=False)
 
     def __init__(self, description: dict):
-        self._description = self.description_schema.load(description)
+        self._description = self.description_schema.load(description, many=False)
         self._qmp = None
         self._tapdevs = []
 
@@ -83,13 +84,13 @@ class VM(ExposedClass):
             # === Virtual Hardware Setup ===
             hardware_desciption = self._description['hardware']
 
-            args += ['-m', hardware_desciption['ram']]
-            args += ['-smp', hardware_desciption['cpu']]
-            args += ['-boot', hardware_desciption['boot']]
+            args += ['-m', str(hardware_desciption['ram'])]
+            args += ['-smp', str(hardware_desciption['cpu'])]
+            args += ['-boot', str(hardware_desciption['boot'])]
 
             # stup RTC
             args += ['-rtc']
-            if hardware_desciption['rtc_utl']:
+            if hardware_desciption['rtc_utc']:
                 args += ['base=utc']
             else:
                 args += ['base=localtime']
@@ -110,6 +111,7 @@ class VM(ExposedClass):
 
             # === Everything prepared... launch the QEMU process ===
 
+            logging.debug(f"Executing command {' '.join(args)}")
             self._process = subprocess.Popen(args)  # start the qemu process itself
             self._qmp.start()  # Start the QMP monitor
 
@@ -124,7 +126,7 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(True)
 
-            logging.warning("Terminating Virtual machine...")
+            logging.warning("Virtual machine is being terminated...")
             self._qmp.disconnect(cleanup=kill)
             if kill:
                 self._process.kill()

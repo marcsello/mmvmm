@@ -120,6 +120,7 @@ class SimpleCommandExecuter(object):
                 result_pusher({"success": True, "result": result})
 
             except Exception as e:
+                logging.exception(e)
                 result_pusher({"success": False, "error": str(e)})
 
     def stop(self):

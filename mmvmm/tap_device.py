@@ -15,17 +15,19 @@ class TAPDevice(object):
 
     def __init__(self, master: str):
 
-        with _global_network_lock:
+        self._active = True
+
+        with TAPDevice._global_network_lock:
 
             self._devid = 0
             while True:
-                if self._devid not in NetworkBuilder._allocated_device_ids:
+                if self._devid not in TAPDevice._allocated_device_ids:
                     break
                 else:
                     self._devid += 1
 
-            NetworkBuilder._allocated_device_ids.append(self._devid)
-            self._devname = NetworkBuilder.NAMING_SCHEME.format(id=self._devid)
+            TAPDevice._allocated_device_ids.append(self._devid)
+            self._devname = TAPDevice.NAMING_SCHEME.format(id=self._devid)
             self._masterdevname = None
 
             subprocess.check_call(["ip", "tuntap", "add", "name", self._devname, "mode", "tap"])
@@ -33,13 +35,11 @@ class TAPDevice(object):
 
             self.update_master(master)
 
-        self._active = True
-
     def update_master(self, master: str):  # This raises exception if master is not available
         if not self._active:
             raise RuntimeError("Device is no longer available")
 
-        with _global_network_lock:
+        with TAPDevice._global_network_lock:
             subprocess.check_call(["ip", "link", "set", self._devname, "master", master])
             self._masterdevname = master
 
@@ -65,10 +65,10 @@ class TAPDevice(object):
         if not self._active:
             raise RuntimeError("Device is no longer available")
 
-        with _global_network_lock:
-            subprocess.check_call(["ip", "link", "set", "self._devname", "down"])
+        with TAPDevice._global_network_lock:
+            subprocess.check_call(["ip", "link", "set", self._devname, "down"])
             subprocess.check_call(["ip", "tuntap", "del", "name", self._devname, "mode", "tap"])
-            NetworkBuilder._allocated_device_ids.remove(self._devid)
+            TAPDevice._allocated_device_ids.remove(self._devid)
 
         self._active = False
 
