@@ -33,7 +33,7 @@ class VNCDescription(Schema):
 
 
 class VMDescriptionSchema(Schema):
-    name = fields.Str(validate=[Length(min=1, max=42), Regexp("^[a-z]+[a-z0-1]*$")])
+    name = fields.Str(validate=[Length(min=1, max=42), Regexp("^[a-z]+[a-z0-9]*$")])
     hardware = fields.Nested(VMHardwareDescriptionSchema, many=False)
     vnc = fields.Nested(VNCDescription, many=False)
 
