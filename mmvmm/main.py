@@ -18,6 +18,8 @@ def main():
 
     # register signal handlers
     def signal_handler(signum, frame):
+        logging.info(f"Signal {signum} recieved... exiting.")
+        vmmanager.close()  # stop all vm
         command_executer.stop()  # will exit the loop() so sessions can be terminated after
 
     signal.signal(signal.SIGTERM, signal_handler)

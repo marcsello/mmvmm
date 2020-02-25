@@ -26,10 +26,11 @@ class VM(ExposedClass):
         self._lock = RLock()
 
     def _poweroff_cleanup(self):
+        logging.debug("Cleaning up...")
         for tapdev in self._tapdevs:
             tapdev.free()
 
-        tapdev = []
+        self._tapdevs = []
         self._qmp.disconnect()  # Fun fact: This will be called from the qmp process
         self._qmp = None
 
@@ -77,7 +78,7 @@ class VM(ExposedClass):
                 args += ['-display', 'none']
 
             self._qmp = QMPMonitor()  # Create QMP monitor
-            self._qmp.register_event_listener('SHUTDOWN', self._poweroff_cleanup)  # meh
+            self._qmp.register_event_listener('SHUTDOWN', lambda data: self._poweroff_cleanup())  # meh
 
             args += ['-qmp', f"unix:{self._qmp.get_sock_path()},server,nowait"]
 
@@ -130,10 +131,10 @@ class VM(ExposedClass):
             self._qmp.disconnect(cleanup=kill)
             if kill:
                 self._process.kill()
+                self._poweroff_cleanup()
             else:
                 self._process.terminate()
-
-            self._poweroff_cleanup()
+                # Poweroff cleanup will be triggered by QMP event
 
     @exposed
     def reset(self):
