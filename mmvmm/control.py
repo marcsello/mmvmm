@@ -47,7 +47,11 @@ class SocketCommandProvider(object):
             for readable in readables:
 
                 if readable is self._server_sock:
-                    new_client, addr = self._server_sock.accept()
+                    try:
+                        new_client, addr = self._server_sock.accept()
+                    except OSError:  # Socket closed
+                        continue
+
                     logging.debug("New Connection from {}".format(str(addr)))
 
                     self._client_sockios.append(BetterSocketIO(new_client))
