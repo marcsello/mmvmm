@@ -164,7 +164,12 @@ class QMPMonitor(Thread):
             if not self._online:  # this is moved inside the locked area to ensure that if a command caused QMP to disconnect, others waiting for the lock will fail
                 raise ConnectionError("QMP is offline")
 
-            self._jsonsock.send_json(cmd)
+            try:
+                self._jsonsock.send_json(cmd)
+            except (BrokenPipeError, OSError):  # The pipe have borked
+                logging.debug("Error while sending QMP command. (VM crashed?)")
+                self._online = False
+                return None
 
             try:
                 return self._response_queue.get(timeout=_timeout)
