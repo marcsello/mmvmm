@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import subprocess
 import logging
+import copy
+
 from schema import VMDescriptionSchema, VMNameSchema
 from expose import ExposedClass, exposed, transformational
 from exception import VMRunningError, VMNotRunningError
@@ -192,10 +194,11 @@ class VM(ExposedClass):
 
     @exposed
     @transformational
-    def update_description(self, description):
+    def update_description(self, partial_description: dict):
         with self._lock:
             self._enforce_vm_state(False)
 
-            self._description.update(
-                self.description_schema.load(description, partial=True)
-            )
+            new = copy.deepcopy(self._description)  # Isolating it so if the new schema is not good, then it won't be overwritten
+            new.update(partial_description)
+            self._description = self.description_schema.load(new)
+
