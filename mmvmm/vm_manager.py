@@ -113,7 +113,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
         # Load them back
         descriptions = self._objectstore.get_prefix('/virtualmachines')
-        for description in descriptions:
+        for name, description in descriptions.items():
             try:
                 self.new(description)
             except KeyError as e:
