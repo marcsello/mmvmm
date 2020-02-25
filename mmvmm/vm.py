@@ -169,6 +169,12 @@ class VM(ExposedClass):
             return self._description['name']
 
     @exposed
+    def get_vnc_port(self) -> int:
+        with self._lock:
+            self._enforce_vm_state(True)
+            return self._vnc_port
+
+    @exposed
     def is_running(self) -> bool:
         with self._lock:
             if not self._process:
