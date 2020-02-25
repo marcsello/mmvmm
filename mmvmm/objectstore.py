@@ -37,32 +37,7 @@ class ObjectStore(etcd3.Etcd3Client):
             decoded_value = jsonplus.loads(encoded_value[0].decode('utf-8'))
             flat_dict[os.path.relpath(encoded_value[1].key.decode('utf-8'), start=basekey)] = decoded_value
 
-        # print(flat_dict)
         return unflatten(flat_dict, splitter='path')
 
 
-if __name__ == '__main__':
-    data = {
-        "name": "demo",
-        "hardware": {
-            "cpu": 10,
-            "ram": 512,
-            "boot": "c",
-            "network": [
-                {"mac": "12:21:12:22:32:11", "master": "br0", "model": "e1000"},
-                {"mac": "12:21:12:22:3311", "master": "br0", "model": "virtio-net"}
-            ],
-            "media": [
-                {"path": "/dev/sdb", "readonly": False, "type": "cdrom", "format": "raw"}
-            ]
-        },
-        "vnc": {
-            "enabled": True,
-            "port": 3
-        }
-    }
-    objs = ObjectStore(port=2379)
-    objs.put("/demovirtualmachines/demo", data)
-    print(objs.get("/demovirtualmachines/demo/name"))
-    print(objs.get("/demovirtualmachines/demo/hardware/network/0/mac"))
-    print(objs.get_prefix("/demovirtualmachines/demo"))
+

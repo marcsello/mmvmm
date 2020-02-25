@@ -3,7 +3,7 @@ import logging
 from vm import VM
 from objectstore import ObjectStore
 
-from exception import UnknownCommandError, UnknownVMError, VMNotRunningError
+from exception import UnknownCommandError, UnknownVMError, VMNotRunningError, VMRunningError
 
 from expose import ExposedClass, exposed, transformational
 
@@ -27,8 +27,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
         descriptions = self._objectstore.get_prefix('/virtualmachines')
 
-        for description in descriptions:
-            logging.debug(f"Loading VM from description: {description}")
+        for name, description in descriptions.items():
             try:
                 self.new(description)
             except Exception as e:
@@ -76,6 +75,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
     @exposed
     @transformational
     def new(self, description):
+        logging.debug(f"Loading VM from description: {description}")
         vm = VM(description)
 
         if vm.get_name() in self._vm_map.keys():
@@ -96,6 +96,29 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         self._objectstore.delete(f"/virtualmachines/{name}")
         self._rebuild_map()
         logging.info(f"Virtual machine deleted: {name}")
+
+    @exposed
+    @transformational
+    def sync(self):
+        # Delete all not running Virtual machines
+        logging.info("Syncrhronizing all virtual machines with their descriptions....")
+        nowarn = []
+        for vm_name in self._vm_map.keys():
+
+            try:
+                self.delete(vm_name)
+            except VMRunningError:
+                nowarn.append(vm_name)
+                logging.warning(f"Couldn't sync {vm_name}. It's still running")
+
+        # Load them back
+        descriptions = self._objectstore.get_prefix('/virtualmachines')
+        for description in descriptions:
+            try:
+                self.new(description)
+            except KeyError as e:
+                if description['name'] not in nowarn:
+                    logging.error(f"Couldn't reload {description['name']}. {str(e)} (Duplicate id?)")
 
     def execute_command(self, target: str, cmd: str, args: dict) -> object:
 

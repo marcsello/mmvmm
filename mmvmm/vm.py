@@ -45,7 +45,7 @@ class VM(ExposedClass):
     def destroy(self):
         with self._lock:
             if self.is_running():
-                raise Exception("Can not destory running VM")
+                raise VMRunningError("Can not destory running VM")
 
     @exposed
     @transformational
