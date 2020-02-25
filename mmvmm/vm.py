@@ -8,6 +8,7 @@ from threading import RLock
 
 from tap_device import TAPDevice
 from qmp import QMPMonitor
+from vnc import VNCAllocator
 
 QEMU_BINARY = "/usr/bin/qemu-system-x86_64"
 
@@ -22,6 +23,7 @@ class VM(ExposedClass):
         self._tapdevs = []
 
         self._process = None
+        self._vnc_port = None
 
         self._lock = RLock()
 
@@ -72,12 +74,19 @@ class VM(ExposedClass):
 
             # setup VNC
             if self._description['vnc']['enabled']:
-                args += ['-vnc', f":{self._description['vnc']['port']}"]
+                self._vnc_port = VNCAllocator.get_free_vnc_port()
+                logging.debug(f"bindig VNC to :{self._vnc_port}")
+            else:
+                self._vnc_port = None
+                logging.warning("Couldn't allocate a free port for VNC")
 
+            if self._vnc_port:
+                args += ['-vnc', f":{self._vnc_port}"]
             else:
                 args += ['-display', 'none']
 
-            self._qmp = QMPMonitor()  # Create QMP monitor
+             # Create QMP monitor
+            self._qmp = QMPMonitor()
             self._qmp.register_event_listener('SHUTDOWN', lambda data: self._poweroff_cleanup())  # meh
 
             args += ['-qmp', f"unix:{self._qmp.get_sock_path()},server,nowait"]

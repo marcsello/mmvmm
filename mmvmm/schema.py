@@ -30,7 +30,6 @@ class VMHardwareDescriptionSchema(Schema):
 
 class VNCDescription(Schema):
     enabled = fields.Boolean(required=True)
-    port = fields.Int(validate=Range(min=1))
 
 
 class VMDescriptionSchema(Schema):
