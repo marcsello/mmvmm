@@ -28,8 +28,9 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         descriptions = self._objectstore.get_prefix('/virtualmachines')
 
         for name, description in descriptions.items():
+
             try:
-                self.new(description)
+                self.new(name, description)
             except Exception as e:
                 logging.error(f"Something went wrong while loading virtual machine {description['name'] if 'name' in description else 'UNKNOWN'}: {str(e)} - VM skipped!")
 
@@ -68,18 +69,21 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 if vm.is_running():
                     at_least_one_powered_on = True
 
+        self._vms = []
+
     @exposed
     def get_list(self) -> list:
         return list(self._vm_map.keys())
 
     @exposed
     @transformational
-    def new(self, description):
-        logging.debug(f"Loading VM from description: {description}")
-        vm = VM(description)
+    def new(self, name: str, description: dict):
+        logging.debug(f"Loading VM {name} from description: {description}")
 
-        if vm.get_name() in self._vm_map.keys():
+        if name in self._vm_map.keys():
             raise KeyError("A virtual machine with this name already exists...")
+
+        vm = VM(name, description)
 
         self._vms.append(vm)
         self._rebuild_map()
@@ -92,6 +96,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         vm = self._vm_map[name]
         vm.destroy()  # If not allowed, this should raise an error
 
+        # no error raised... continuing
         self._vms.remove(vm)
         self._objectstore.delete(f"/virtualmachines/{name}")
         self._rebuild_map()
@@ -115,10 +120,10 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         descriptions = self._objectstore.get_prefix('/virtualmachines')
         for name, description in descriptions.items():
             try:
-                self.new(description)
+                self.new(name, description)
             except KeyError as e:
-                if description['name'] not in nowarn:
-                    logging.error(f"Couldn't reload {description['name']}. {str(e)} (Duplicate id?)")
+                if name not in nowarn:
+                    logging.error(f"Couldn't reload {name}. {str(e)} (Duplicate id?)")
 
     def execute_command(self, target: str, cmd: str, args: dict) -> object:
 

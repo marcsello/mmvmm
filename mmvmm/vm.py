@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import subprocess
 import logging
-from schema import VMDescriptionSchema
+from schema import VMDescriptionSchema, VMNameSchema
 from expose import ExposedClass, exposed, transformational
 from exception import VMRunningError, VMNotRunningError
 from threading import RLock
@@ -16,9 +16,11 @@ QEMU_BINARY = "/usr/bin/qemu-system-x86_64"
 class VM(ExposedClass):
 
     description_schema = VMDescriptionSchema(many=False)
+    name_schema = VMNameSchema(many=False)  # From the few bad solutions this is the least worse
 
-    def __init__(self, description: dict):
-        self._description = self.description_schema.load(description, many=False)
+    def __init__(self, name: str, description: dict):
+        self._description = self.description_schema.load(description)
+        self._name = self.name_schema.load({'name': name})['name']
         self._qmp = None
         self._tapdevs = []
 
@@ -70,7 +72,7 @@ class VM(ExposedClass):
             # could be leaved out to disable kvm
             args += ['-enable-kvm', '-cpu', 'host']
 
-            args += ['-name', self._description['name']]
+            args += ['-name', self._name]
 
             # setup VNC
             if self._description['vnc']['enabled']:
@@ -114,7 +116,7 @@ class VM(ExposedClass):
                 tapdev = TAPDevice(network['master'])
                 self._tapdevs.append(tapdev)
 
-                netdevid = f"{self._description['name']}net{len(self._tapdevs)-1}"
+                netdevid = f"{self._name}net{len(self._tapdevs)-1}"
 
                 args += ['-netdev', f"tap,id={netdevid},ifname={tapdev.device},script=no,downscript=no"]
                 args += ['-device', f"{network['model']},netdev={netdevid},mac={network['mac']}"]
@@ -166,7 +168,7 @@ class VM(ExposedClass):
     @exposed
     def get_name(self) -> str:
         with self._lock:
-            return self._description['name']
+            return self._name
 
     @exposed
     def get_vnc_port(self) -> int:
