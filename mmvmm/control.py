@@ -52,7 +52,7 @@ class SocketCommandProvider(object):
                     except OSError:  # Socket closed
                         continue
 
-                    logging.debug("New Connection from {}".format(str(addr)))
+                    logging.debug("New control connection!")
 
                     self._client_sockios.append(BetterSocketIO(new_client))
 
