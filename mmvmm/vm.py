@@ -133,7 +133,11 @@ class VM(ExposedClass):
     def poweroff(self):
         with self._lock:
             self._enforce_vm_state(True)
-            self._qmp.send_command({"execute": "system_powerdown"})
+            try:
+                self._qmp.send_command({"execute": "system_powerdown"})
+            except ConnectionError:  # There was a QMP connection error... Sending SIGTERM to process instead
+                logging.warning("There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
+                self.terminate(False)
 
     @exposed
     def terminate(self, kill=False):

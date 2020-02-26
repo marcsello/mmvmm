@@ -13,19 +13,19 @@ from exception import UnknownVMError, UnknownCommandError
 
 class SocketCommandProvider(object):
 
+    SOCKET_PATH = "/run/mmvmm/control.sock"
+
     def __init__(self):
 
-        socket_path = "/run/mmvmm/control.sock"
-
         try:
-            os.unlink(socket_path)
+            os.unlink(self.SOCKET_PATH)
         except OSError:
             pass
 
         self._server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._server_sock.bind(socket_path)
+        self._server_sock.bind(self.SOCKET_PATH)
         self._server_sock.listen(5)
-        os.chmod(socket_path, 0o660)
+        os.chmod(self.SOCKET_PATH, 0o660)
 
         self._client_sockios = []
 
@@ -88,6 +88,12 @@ class SocketCommandProvider(object):
             client_sockio.close()
 
         self._server_sock.close()
+
+        try:
+            os.unlink(self.SOCKET_PATH)
+        except OSError:
+            pass
+
         self._active = False
 
 

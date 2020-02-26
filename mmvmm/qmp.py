@@ -94,6 +94,10 @@ class QMPMonitor(Thread):
                 logging.error("Connection refused while connecting to QMP (vm crashed?)")
                 return
 
+            except OSError as e:
+                logging.error(f"Could not connect to QMP: {str(e)}")
+                return
+
         if not connected:  # probably active turned to false
             return
 
