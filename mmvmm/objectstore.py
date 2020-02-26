@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import etcd3
 import jsonplus
-from flatten_dict import flatten, unflatten
+from morph import flatten, unflatten
 import os.path
 
 
@@ -22,7 +22,7 @@ class ObjectStore(etcd3.Etcd3Client):
     def put(self, basekey: str, value: object):
 
         if isinstance(value, dict):
-            for key, value in flatten(value, reducer='path').items():
+            for key, value in flatten(value, separator='/').items():
                 self._put_encoded(os.path.join(basekey, str(key)), value)
         else:
             self._put_encoded(basekey, value)
@@ -37,7 +37,7 @@ class ObjectStore(etcd3.Etcd3Client):
             decoded_value = jsonplus.loads(encoded_value[0].decode('utf-8'))
             flat_dict[os.path.relpath(encoded_value[1].key.decode('utf-8'), start=basekey)] = decoded_value
 
-        return unflatten(flat_dict, splitter='path')
+        return unflatten(flat_dict, separator='/')
 
 
 
