@@ -118,7 +118,7 @@ class SimpleCommandExecuter(object):
 
             # execute the command
 
-            logging.info("Executing command: {}".format(cmd['cmd']))
+            logging.debug("Executing command: {}".format(cmd['cmd']))
             try:
 
                 result = self._vmmanager.execute_command(

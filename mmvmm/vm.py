@@ -59,6 +59,8 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(False)
 
+            logging.info("Starting VM...")
+
             # The VM is not running. It's safe to kill off the QMP Monitor
             if self._qmp and self._qmp.is_alive():
                 logging.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
@@ -133,6 +135,9 @@ class VM(ExposedClass):
     def poweroff(self):
         with self._lock:
             self._enforce_vm_state(True)
+
+            logging.info("Powering off VM...")
+
             try:
                 self._qmp.send_command({"execute": "system_powerdown"})
             except ConnectionError:  # There was a QMP connection error... Sending SIGTERM to process instead
@@ -144,7 +149,7 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(True)
 
-            logging.warning("Virtual machine is being terminated...")
+            logging.warning("VM is being terminated...")
             self._qmp.disconnect(cleanup=kill)
             if kill:
                 self._process.kill()
@@ -157,18 +162,21 @@ class VM(ExposedClass):
     def reset(self):
         with self._lock:
             self._enforce_vm_state(True)
+            logging.info("Resetting VM...")
             self._qmp.send_command({"execute": "system_reset"})
 
     @exposed
     def pause(self):
         with self._lock:
             self._enforce_vm_state(True)
+            logging.info("Pausing VM...")
             self._qmp.send_command({"execute": "stop"})
 
     @exposed
     def cont(self):  # continue
         with self._lock:
             self._enforce_vm_state(True)
+            logging.info("Continuing VM...")
             self._qmp.send_command({"execute": "cont"})
 
     @exposed
