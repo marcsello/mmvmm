@@ -2,6 +2,7 @@
 import subprocess
 import logging
 import copy
+import os
 
 from schema import VMDescriptionSchema, VMNameSchema
 from expose import ExposedClass, exposed, transformational
@@ -30,6 +31,10 @@ class VM(ExposedClass):
         self._vnc_port = None
 
         self._lock = RLock()
+
+    @staticmethod
+    def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
+        os.setpgrp()
 
     def _poweroff_cleanup(self):
         logging.debug("Cleaning up...")
@@ -128,7 +133,7 @@ class VM(ExposedClass):
             # === Everything prepared... launch the QEMU process ===
 
             logging.debug(f"Executing command {' '.join(args)}")
-            self._process = subprocess.Popen(args)  # start the qemu process itself
+            self._process = subprocess.Popen(args, preexec_fn=VM._preexec)  # start the qemu process itself
             self._qmp.start()  # Start the QMP monitor
 
     @exposed

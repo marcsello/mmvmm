@@ -55,6 +55,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 else:
                     vm.poweroff()
 
+                logging.debug(f"VM {vm.get_name()} is still running...")
                 at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
             except VMNotRunningError:
                 pass
