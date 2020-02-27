@@ -1,4 +1,5 @@
-python-etcd>=0.4.5
+etcd3
 marshmallow
 jsonplus
 morph
+bettersocket
