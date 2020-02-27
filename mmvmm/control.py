@@ -5,9 +5,10 @@ import socket
 import select
 import logging
 from bettersocket import BetterSocketIO
+from marshmallow.exceptions import ValidationError
+
 from vm_manager import VMMAnager
-
-
+from schema import ControlCommandSchema
 from exception import UnknownVMError, UnknownCommandError
 
 
@@ -99,6 +100,8 @@ class SocketCommandProvider(object):
 
 class SimpleCommandExecuter(object):
 
+    control_command_schema = ControlCommandSchema(many=False)
+
     def __init__(self, command_provider: SocketCommandProvider, vmmanager: VMMAnager):
         self._command_provider = command_provider
         self._vmmanager = vmmanager
@@ -107,13 +110,16 @@ class SimpleCommandExecuter(object):
     def loop(self):
 
         while self._active:
-            cmd, result_pusher = self._command_provider.get_command_object() or (None, None)
+            raw_cmd, result_pusher = self._command_provider.get_command_object() or (None, None)
 
             if not self._active:  # ha a socket closed, akkor az vissza fog térni none-al, a push command meg fasságot küld a geciba
                 break
 
-            if (not isinstance(cmd, dict)) or ('cmd' not in cmd) or ('args' not in cmd) or ('target' not in cmd):  # TODO: use schema
-                result_pusher(None)
+            try:
+                cmd = self.control_command_schema.load(raw_cmd)
+            except ValidationError as e:
+                logging.debug(f"Command schema validation failed: {str(e)}")
+                result_pusher({"success": False, "error": "Invalid command schema"})
                 continue
 
             # execute the command

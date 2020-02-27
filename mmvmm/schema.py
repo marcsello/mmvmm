@@ -45,3 +45,12 @@ class VMNameSchema(Schema):
 
         class Meta:
             unknown = RAISE
+
+
+class ControlCommandSchema(Schema):
+        cmd = fields.Str(validate=Length(min=1), required=True, allow_none=False)
+        args = fields.Dict(missing={})
+        target = fields.Str(allow_none=True, missing=None)
+
+        class Meta:
+            unknown = RAISE
