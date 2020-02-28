@@ -45,7 +45,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
     ## PUBLIC ##
 
-    def close(self, forced=False):
+    def close(self, forced: bool = False, timeout: int = 60):
         at_least_one_powered_on = False
         for vm in self._vms:
             try:
@@ -61,14 +61,28 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 pass
 
         if at_least_one_powered_on:
-            logging.warning("Virtual machines are still running... Waiting for them to power off properly...")
+            logging.warning(f"Virtual machines are still running... Waiting for them to power off properly... (timeout: {timeout}sec)")
 
-        while at_least_one_powered_on:
-            time.sleep(1)
-            at_least_one_powered_on = False
-            for vm in self._vms:
-                if vm.is_running():
-                    at_least_one_powered_on = True
+            wait_started = time.time()
+
+            while at_least_one_powered_on:
+                time.sleep(1)
+
+                if (time.time() - wait_started) > timeout:
+                    logging.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
+                    for vm in self._vms:
+
+                        try:
+                            vm.terminate(kill=True)
+                        except VMNotRunningError:
+                            pass
+
+                    break
+                else:
+                    at_least_one_powered_on = False
+                    for vm in self._vms:
+                        if vm.is_running():
+                            at_least_one_powered_on = True
 
         self._vms = []
 
