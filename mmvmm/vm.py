@@ -58,6 +58,17 @@ class VM(ExposedClass):
             if self.is_running():
                 raise VMRunningError("Can not destory running VM")
 
+    def autostart(self):
+        """
+        Starts the VM, if it's marked as autostart. Otherwise does nothing.
+        """
+        with self._lock:
+            if self._description['autostart']:
+                try:
+                    self.start()
+                except VMRunningError:
+                    logging.debug("Not autostarting because already running... (wtf?)")
+
     @exposed
     @transformational
     def start(self):

@@ -30,6 +30,10 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     logging.info("MMVMM is ready!")
+
+    if '--no-autostart' not in sys.argv:
+        vmmanager.autostart()
+
     command_executer.loop()
 
     logging.info("Shutting down MMVMM...")

@@ -76,7 +76,9 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         """
         Start all VMs marked as autostart.
         """
-        pass
+        logging.info("Starting all VMs marked as autstart.")
+        for vm in self._vms:
+            vm.autostart()
 
     @exposed
     def get_list(self) -> list:
