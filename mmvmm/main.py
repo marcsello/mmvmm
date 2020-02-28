@@ -9,7 +9,7 @@ from control import SocketCommandProvider, SimpleCommandExecuter
 
 
 def main():
-    logging.basicConfig(filename="", format="%(asctime)s - %(levelname)s: %(message)s", level=logging.DEBUG if '--debug' in sys.argv else logging.INFO)
+    logging.basicConfig(filename="", format="%(asctime)s - %(name)s [%(levelname)s]: %(message)s", level=logging.DEBUG if '--debug' in sys.argv else logging.INFO)
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")
     os.makedirs("/run/mmvmm", mode=0o770, exist_ok=True)
     objectstore = ObjectStore(

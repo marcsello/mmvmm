@@ -16,7 +16,8 @@ from utils import JSONSocketWrapper
 
 class QMPMonitor(Thread):
 
-    def __init__(self):
+    def __init__(self, upper_level_logger: logging.Logger):
+        self._logger = upper_level_logger.getChild('qmp')
         Thread.__init__(self)
 
         self._socket_path = QMPMonitor._create_socket_path()
@@ -85,17 +86,17 @@ class QMPMonitor(Thread):
 
                 retries -= 1
                 if retries == 0:
-                    logging.error("Couldn't connect to QMP after 5 attempts")
+                    self._logger.error("Couldn't connect after 5 attempts")
                     return
                 else:
-                    logging.debug("Failed to connect to QMP. Retrying...")
+                    self._logger.debug("Failed to connect. Retrying...")
 
             except ConnectionRefusedError:  # The socket is there... but it refuses connection... probably QEMU crashed or something. Returning unconditionally
-                logging.error("Connection refused while connecting to QMP (vm crashed?)")
+                self._logger.error("Connection refused while connecting. (vm crashed?)")
                 return
 
             except OSError as e:
-                logging.error(f"Could not connect to QMP: {str(e)}")
+                self._logger.error(f"Could not connect: {str(e)}")
                 return
 
         if not connected:  # probably active turned to false
@@ -104,11 +105,11 @@ class QMPMonitor(Thread):
         # negotiate
 
         if not self._negotiation():
-            logging.warning(f"Negotiation failed with QMP protocol on: {self._socket_path}")
+            self._logger.warning(f"Negotiation failed with QMP protocol on: {self._socket_path}")
             self._socket.close()
             return
         else:
-            logging.debug("Negotiated with QMP")
+            self._logger.debug("Negotiated!")
 
         # run
         # from now on, this thread simply functions as a reciever thread for the issued commands
@@ -123,7 +124,7 @@ class QMPMonitor(Thread):
                 break
 
             except (json.JSONDecodeError, UnicodeError):
-                logging.warning("Malformed QMP message received!")
+                self._logger.warning("Malformed message received!")
                 continue
 
             if not data:
@@ -131,28 +132,28 @@ class QMPMonitor(Thread):
 
             if "event" in data:
                 event = data['event']
-                logging.debug(f"QMP event happened: {event}")
+                self._logger.debug(f"Event happened: {event}")
 
                 if event in self._event_listeners.keys():
                     self._event_listeners[event](data['data'])
 
             elif "return" in data:
-                logging.debug("QMP command successful")
+                self._logger.debug("Command successful")
                 self._response_queue.put(data)  # this also signals the thread to continue, and also blocks this thread if the previous response is not processed yet
 
             elif "error" in data:
-                logging.error(f"QMP command returned error: {data['error']['class']}")
+                self._logger.error(f"Command returned error: {data['error']['class']}")
                 self._response_queue.put(data)
 
             else:
-                logging.warning("Unknown QMP message recieved")
+                self._logger.warning("Unknown message recieved")
 
         # active became false:
 
         self._online = False
         self._socket.close()
 
-        logging.debug("QMP session closed")
+        self._logger.debug("Session closed")
         self._active = False
 
     def is_online(self):
@@ -171,7 +172,7 @@ class QMPMonitor(Thread):
             try:
                 self._jsonsock.send_json(cmd)
             except (BrokenPipeError, OSError):  # The pipe have borked
-                logging.debug("Error while sending QMP command. (VM crashed?)")
+                self._logger.debug("Error while sending command. (VM crashed?)")
                 self._online = False
                 return None
 

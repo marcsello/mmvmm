@@ -13,6 +13,8 @@ import time
 class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
     def __init__(self, objectstore: ObjectStore):
+        self._logger = logging.getLogger("manager")
+
         self._vms = []
         self._vm_map = {}
 
@@ -32,7 +34,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
             try:
                 self.new(name, description)
             except Exception as e:
-                logging.error(f"Something went wrong while loading virtual machine {description['name'] if 'name' in description else 'UNKNOWN'}: {str(e)} - VM skipped!")
+                self._logger.error(f"Something went wrong while loading virtual machine {description['name'] if 'name' in description else 'UNKNOWN'}: {str(e)} - VM skipped!")
 
     def _save(self, vm: VM):
         description = vm.dump_description()
@@ -55,13 +57,13 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 else:
                     vm.poweroff()
 
-                logging.debug(f"VM {vm.get_name()} is still running...")
+                self._logger.debug(f"VM {vm.get_name()} is still running...")
                 at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
             except VMNotRunningError:
                 pass
 
         if at_least_one_powered_on:
-            logging.warning(f"Virtual machines are still running... Waiting for them to power off properly... (timeout: {timeout}sec)")
+            self._logger.warning(f"Virtual machines are still running... Waiting for them to power off properly... (timeout: {timeout}sec)")
 
             wait_started = time.time()
 
@@ -69,7 +71,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 time.sleep(1)
 
                 if (time.time() - wait_started) > timeout:
-                    logging.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
+                    self._logger.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
                     for vm in self._vms:
 
                         try:
@@ -90,7 +92,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         """
         Start all VMs marked as autostart.
         """
-        logging.info("Starting all VMs marked as autstart.")
+        self._logger.info("Starting all VMs marked as autstart.")
         for vm in self._vms:
             vm.autostart()
 
@@ -101,7 +103,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
     @exposed
     @transformational
     def new(self, name: str, description: dict):
-        logging.debug(f"Loading VM {name} from description: {description}")
+        self._logger.debug(f"Loading VM {name} from description: {description}")
 
         if name in self._vm_map.keys():
             raise KeyError("A virtual machine with this name already exists...")
@@ -111,7 +113,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         self._vms.append(vm)
         self._rebuild_map()
         self._save(vm)
-        logging.info(f"New virtual machine created: {vm.get_name()}")
+        self._logger.info(f"New virtual machine created: {vm.get_name()}")
 
     @exposed
     @transformational
@@ -123,13 +125,13 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
         self._vms.remove(vm)
         self._objectstore.delete(f"/virtualmachines/{name}")
         self._rebuild_map()
-        logging.info(f"Virtual machine deleted: {name}")
+        self._logger.info(f"Virtual machine deleted: {name}")
 
     @exposed
     @transformational
     def sync(self):
         # Delete all not running Virtual machines
-        logging.info("Syncrhronizing all virtual machines with their descriptions....")
+        self._logger.info("Syncrhronizing all virtual machines with their descriptions....")
         nowarn = []
         for vm_name in self._vm_map.keys():
 
@@ -137,7 +139,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 self.delete(vm_name)
             except VMRunningError:
                 nowarn.append(vm_name)
-                logging.warning(f"Couldn't sync {vm_name}. It's still running")
+                self._logger.warning(f"Couldn't sync {vm_name}. It's still running")
 
         # Load them back
         descriptions = self._objectstore.get_prefix('/virtualmachines')
@@ -146,7 +148,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 self.new(name, description)
             except KeyError as e:
                 if name not in nowarn:
-                    logging.error(f"Couldn't reload {name}. {str(e)} (Duplicate id?)")
+                    self._logger.error(f"Couldn't reload {name}. {str(e)} (Duplicate id?)")
 
     def execute_command(self, target: str, cmd: str, args: dict) -> object:
 

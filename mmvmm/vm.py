@@ -22,8 +22,12 @@ class VM(ExposedClass):
     name_schema = VMNameSchema(many=False)  # From the few bad solutions this is the least worse
 
     def __init__(self, name: str, description: dict):
+        self._logger = logging.getLogger("vm")
+
         self._description = self.description_schema.load(description)
         self._name = self.name_schema.load({'name': name})['name']
+        self._logger = logging.getLogger("vm").getChild(name)
+
         self._qmp = None
         self._tapdevs = []
 
@@ -37,7 +41,7 @@ class VM(ExposedClass):
         os.setpgrp()
 
     def _poweroff_cleanup(self):
-        logging.debug("Cleaning up...")
+        self._logger.debug("Cleaning up...")
         for tapdev in self._tapdevs:
             tapdev.free()
 
@@ -67,7 +71,7 @@ class VM(ExposedClass):
                 try:
                     self.start()
                 except VMRunningError:
-                    logging.debug("Not autostarting because already running... (wtf?)")
+                    self._logger.debug("Not autostarting because already running... (wtf?)")
 
     @exposed
     @transformational
@@ -75,11 +79,11 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(False)
 
-            logging.info("Starting VM...")
+            self._logger.info("Starting VM...")
 
             # The VM is not running. It's safe to kill off the QMP Monitor
             if self._qmp and self._qmp.is_alive():
-                logging.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
+                self._logger.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
                 self._qmp.disconnect(cleanup=True)
                 self._qmp.join()
 
@@ -97,10 +101,10 @@ class VM(ExposedClass):
             # setup VNC
             if self._description['vnc']['enabled']:
                 self._vnc_port = VNCAllocator.get_free_vnc_port()
-                logging.debug(f"bindig VNC to :{self._vnc_port}")
+                self._logger.debug(f"bindig VNC to :{self._vnc_port}")
             else:
                 self._vnc_port = None
-                logging.warning("Couldn't allocate a free port for VNC")
+                self._logger.warning("Couldn't allocate a free port for VNC")
 
             if self._vnc_port:
                 args += ['-vnc', f":{self._vnc_port}"]
@@ -108,7 +112,7 @@ class VM(ExposedClass):
                 args += ['-display', 'none']
 
              # Create QMP monitor
-            self._qmp = QMPMonitor()
+            self._qmp = QMPMonitor(self._logger)
             self._qmp.register_event_listener('SHUTDOWN', lambda data: self._poweroff_cleanup())  # meh
 
             args += ['-qmp', f"unix:{self._qmp.get_sock_path()},server,nowait"]
@@ -143,7 +147,7 @@ class VM(ExposedClass):
 
             # === Everything prepared... launch the QEMU process ===
 
-            logging.debug(f"Executing command {' '.join(args)}")
+            self._logger.debug(f"Executing command {' '.join(args)}")
             self._process = subprocess.Popen(args, preexec_fn=VM._preexec)  # start the qemu process itself
             self._qmp.start()  # Start the QMP monitor
 
@@ -152,12 +156,12 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(True)
 
-            logging.info("Powering off VM...")
+            self._logger.info("Powering off VM...")
 
             try:
                 self._qmp.send_command({"execute": "system_powerdown"})
             except ConnectionError:  # There was a QMP connection error... Sending SIGTERM to process instead
-                logging.warning("There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
+                self._logger.warning("There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
                 self.terminate(False)
 
     @exposed
@@ -165,7 +169,7 @@ class VM(ExposedClass):
         with self._lock:
             self._enforce_vm_state(True)
 
-            logging.warning("VM is being terminated...")
+            self._logger.warning("VM is being terminated...")
             self._qmp.disconnect(cleanup=kill)
             if kill:
                 self._process.kill()
@@ -178,21 +182,21 @@ class VM(ExposedClass):
     def reset(self):
         with self._lock:
             self._enforce_vm_state(True)
-            logging.info("Resetting VM...")
+            self._logger.info("Resetting VM...")
             self._qmp.send_command({"execute": "system_reset"})
 
     @exposed
     def pause(self):
         with self._lock:
             self._enforce_vm_state(True)
-            logging.info("Pausing VM...")
+            self._logger.info("Pausing VM...")
             self._qmp.send_command({"execute": "stop"})
 
     @exposed
     def cont(self):  # continue
         with self._lock:
             self._enforce_vm_state(True)
-            logging.info("Continuing VM...")
+            self._logger.info("Continuing VM...")
             self._qmp.send_command({"execute": "cont"})
 
     @exposed
