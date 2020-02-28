@@ -72,6 +72,12 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
         self._vms = []
 
+    def autostart(self):
+        """
+        Start all VMs marked as autostart.
+        """
+        pass
+
     @exposed
     def get_list(self) -> list:
         return list(self._vm_map.keys())
