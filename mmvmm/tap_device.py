@@ -33,7 +33,11 @@ class TAPDevice(object):
             subprocess.check_call(["ip", "tuntap", "add", "name", self._devname, "mode", "tap"])
             subprocess.check_call(["ip", "link", "set", self._devname, "up"])
 
-            self.update_master(master)
+            try:
+                self.update_master(master)
+            except subprocess.CalledProcessError:
+                self.free()
+                raise
 
     def update_master(self, master: str):  # This raises exception if master is not available
         if not self._active:
