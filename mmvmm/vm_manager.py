@@ -123,7 +123,10 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
         # no error raised... continuing
         self._vms.remove(vm)
-        self._objectstore.delete(f"/virtualmachines/{name}")
+        success = self._objectstore.delete_prefix(f"/virtualmachines/{name}/")
+        if not success:
+            self._logger.error(f"Failed to delete /virtualmachines/{name}/ from etcd!")
+
         self._rebuild_map()
         self._logger.info(f"Virtual machine deleted: {name}")
 
