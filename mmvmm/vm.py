@@ -3,6 +3,7 @@ import subprocess
 import logging
 import copy
 import os
+import time
 
 from schema import VMDescriptionSchema, VMNameSchema
 from expose import ExposedClass, exposed, transformational
@@ -40,7 +41,17 @@ class VM(ExposedClass):
     def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
         os.setpgrp()
 
-    def _poweroff_cleanup(self):
+    def _poweroff_cleanup(self, timeout: int = 5):
+
+        if self.is_running():
+            self._logger.info(f"Qemu process still running. Delaying cleanup. (max. {timeout}sec)")
+            wait_started = time.time()
+            while self.is_running():
+                time.sleep(1)
+                if (time.time() - wait_started) > 5:
+                    self._logger.warning("Cleanup delay expired. Killing Qemu!")
+                    self._process.kill()
+
         self._logger.debug("Cleaning up...")
         for tapdev in self._tapdevs:
             tapdev.free()
