@@ -226,11 +226,12 @@ class VM(ExposedClass):
 
     @exposed
     @transformational
-    def update_description(self, partial_description: dict):
+    def update_description(self, new_description: dict):
+        """
+        Replaces the current description with the supplied one
+        """
         with self._lock:
             self._enforce_vm_state(False)
 
-            new = copy.deepcopy(self._description)  # Isolating it so if the new schema is not good, then it won't be overwritten
-            new.update(partial_description)
-            self._description = self.description_schema.load(new)
+            self._description = self.description_schema.load(new_description)
 

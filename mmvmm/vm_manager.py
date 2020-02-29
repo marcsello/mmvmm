@@ -38,6 +38,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
     def _save(self, vm: VM):
         description = vm.dump_description()
+        self._objectstore.delete_prefix(f"/virtualmachines/{vm.get_name()}/")  # ugly fix
         self._objectstore.put(f"/virtualmachines/{vm.get_name()}", description)
 
     def _save_all(self):
