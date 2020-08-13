@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import logging
 from vm import VM
-from objectstore import ObjectStore
 
 from exception import UnknownCommandError, UnknownVMError, VMNotRunningError, VMRunningError
 
@@ -12,39 +11,8 @@ import time
 
 class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
-    def __init__(self, objectstore: ObjectStore):
+    def __init__(self):
         self._logger = logging.getLogger("manager")
-
-        self._vms = []
-        self._vm_map = {}
-
-        self._objectstore = objectstore
-
-        self._load()
-
-    def _rebuild_map(self):
-        self._vm_map = {vm.get_name(): vm for vm in self._vms}
-
-    def _load(self):
-
-        descriptions = self._objectstore.get_prefix('/virtualmachines')
-
-        for name, description in descriptions.items():
-
-            try:
-                self.new(name, description)
-            except Exception as e:
-                self._logger.error(f"Something went wrong while loading virtual machine {description['name'] if 'name' in description else 'UNKNOWN'}: {str(e)} - VM skipped!")
-
-    def _save(self, vm: VM):
-        description = vm.dump_description()
-        self._objectstore.delete_prefix(f"/virtualmachines/{vm.get_name()}/")  # ugly fix
-        self._objectstore.put(f"/virtualmachines/{vm.get_name()}", description)
-
-    def _save_all(self):
-
-        for vm in self._vms:
-            self._save(vm)
 
     ## PUBLIC ##
 
