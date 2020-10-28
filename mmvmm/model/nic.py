@@ -19,6 +19,6 @@ class NIC(Base):
     mtu = Column(Integer, nullable=False, default=1500)
 
     __table_args__ = (
-        CheckConstraint(mtu >= 0, name='mtu_positive'),
+        CheckConstraint(mtu >= 1, name='mtu_positive'),
         {}
     )

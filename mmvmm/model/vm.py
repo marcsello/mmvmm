@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import enum
-from sqlalchemy import Column, Integer, String, Enum, DateTime
+from sqlalchemy import Column, Integer, String, Enum, DateTime, Boolean
 from sqlalchemy.sql import func
 
 from .db import Base
@@ -24,3 +24,5 @@ class VM(Base):
     status = Column(Enum(VMStatus), nullable=False, default=VMStatus.NEW)
     since = Column(DateTime, nullable=False, server_default=func.now())
     pid = Column(Integer, nullable=True, unique=True)
+
+    autostart = Column(Boolean, nullable=False, default=False)

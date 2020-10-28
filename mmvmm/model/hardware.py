@@ -18,8 +18,8 @@ class Hardware(Base):
     rtc_utc = Column(Boolean, nullable=False, default=True)
 
     __table_args__ = (
-        CheckConstraint(ram_m >= 0, name='ram_positive'),
-        CheckConstraint(cpus >= 0, name='cpus_positive'),
+        CheckConstraint(ram_m >= 1, name='ram_positive'),
+        CheckConstraint(cpus >= 1, name='cpus_positive'),
         CheckConstraint(boot in ['c', 'n', 'd'], name='boot_valid'),
         {}
     )

@@ -1,6 +1,4 @@
 sqlalchemy
 marshmallow
 marshmallow-sqlalchemy
-jsonplus
-morph
-bettersocket
+marshmallow-enum
