@@ -8,8 +8,7 @@ from bettersocket import BetterSocketIO
 from marshmallow.exceptions import ValidationError
 
 from vm_manager import VMMAnager
-from schema import ControlCommandSchema
-from exception import UnknownVMError, UnknownCommandError
+from schema.schema import ControlCommandSchema
 
 
 class SocketCommandProvider(object):

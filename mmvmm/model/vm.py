@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import subprocess
 import logging
-import copy
 import os
 import time
 
-from schema import VMDescriptionSchema, VMNameSchema
-from expose import ExposedClass, exposed, transformational
+from .db import Base, handles
+from sqlalchemy import String, Column, Integer, Boolean
+
 from exception import VMRunningError, VMNotRunningError
 from threading import RLock
 
@@ -17,17 +17,16 @@ from vnc import VNCAllocator
 QEMU_BINARY = "/usr/bin/qemu-system-x86_64"
 
 
-class VM(ExposedClass):
+class VM(Base):
 
-    description_schema = VMDescriptionSchema(many=False)
-    name_schema = VMNameSchema(many=False)  # From the few bad solutions this is the least worse
+    __tablename__ = "vms"
 
-    def __init__(self, name: str, description: dict):
-        self._logger = logging.getLogger("vm")
+    id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
+    name = Column(String(42), nullable=False, unique=True)
+    pid = Column(Integer, nullable=True, unique=True)
 
-        self._description = self.description_schema.load(description)
-        self._name = self.name_schema.load({'name': name})['name']
-        self._logger = logging.getLogger("vm").getChild(name)
+    def __init__(self):
+        self._logger = logging.getLogger("vm").getChild(self.name)
 
         self._qmp = None
         self._tapdevs = []
@@ -68,25 +67,7 @@ class VM(ExposedClass):
             else:
                 raise VMNotRunningError()
 
-    def destroy(self):
-        with self._lock:
-            if self.is_running():
-                raise VMRunningError("Can not destory running VM")
-
-    def autostart(self):
-        """
-        Starts the VM, if it's marked as autostart. Otherwise does nothing.
-        """
-        with self._lock:
-            if self._description['autostart']:
-                try:
-                    self.start()
-                except VMRunningError:
-                    self._logger.debug("Not autostarting because already running... (wtf?)")
-
-    @exposed
-    @transformational
-    def start(self):
+    def _start(self):
         with self._lock:
             self._enforce_vm_state(False)
 
@@ -162,8 +143,7 @@ class VM(ExposedClass):
             self._process = subprocess.Popen(args, preexec_fn=VM._preexec)  # start the qemu process itself
             self._qmp.start()  # Start the QMP monitor
 
-    @exposed
-    def poweroff(self):
+    def _poweroff(self):
         with self._lock:
             self._enforce_vm_state(True)
 
@@ -175,8 +155,7 @@ class VM(ExposedClass):
                 self._logger.warning("There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
                 self.terminate(False)
 
-    @exposed
-    def terminate(self, kill=False):
+    def _terminate(self, kill=False):
         with self._lock:
             self._enforce_vm_state(True)
 
@@ -189,60 +168,32 @@ class VM(ExposedClass):
                 self._process.terminate()
                 # Poweroff cleanup will be triggered by QMP event
 
-    @exposed
-    def reset(self):
+
+    def _reset(self):
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Resetting VM...")
             self._qmp.send_command({"execute": "system_reset"})
 
-    @exposed
-    def pause(self):
+
+    def _pause(self):
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Pausing VM...")
             self._qmp.send_command({"execute": "stop"})
 
-    @exposed
-    def cont(self):  # continue
+
+    def _cont(self):  # continue
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Continuing VM...")
             self._qmp.send_command({"execute": "cont"})
 
-    @exposed
-    def get_name(self) -> str:
-        with self._lock:
-            return self._name
-
-    @exposed
-    def get_vnc_port(self) -> int:
-        with self._lock:
-            self._enforce_vm_state(True)
-            return self._vnc_port
-
-    @exposed
-    def is_running(self) -> bool:
+    def _is_running(self) -> bool:
         with self._lock:
             if not self._process:
                 return False
 
             # the process object exists
             return self._process.poll() is None
-
-    @exposed
-    def dump_description(self) -> dict:
-        with self._lock:
-            return self.description_schema.dump(self._description)
-
-    @exposed
-    @transformational
-    def update_description(self, new_description: dict):
-        """
-        Replaces the current description with the supplied one
-        """
-        with self._lock:
-            self._enforce_vm_state(False)
-
-            self._description = self.description_schema.load(new_description)
 
