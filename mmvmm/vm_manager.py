@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import logging
-from model.vm import VM
+from vm_instance import VM
 
 from exception import UnknownCommandError, UnknownVMError, VMNotRunningError, VMRunningError
 
