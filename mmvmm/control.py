@@ -1,143 +1,67 @@
 #!/usr/bin/env python3
-import json
-import os
-import socket
-import select
-import logging
-from bettersocket import BetterSocketIO
-from marshmallow.exceptions import ValidationError
-
-from vm_manager import VMMAnager
-from schema.schema import ControlCommandSchema
+from functools import wraps
+from vm_instance import VMInstance
+from vm_manager import VMManager
 
 
-class SocketCommandProvider(object):
+def _vm_mapped(f):
+    @wraps(f)
+    def call(self, vm_name: str, *args, **kwargs):
+        vm = self._lookup_vm(vm_name)
+        f(self, vm, *args, **kwargs)
 
-    SOCKET_PATH = "/run/mmvmm/control.sock"
-
-    def __init__(self):
-
-        try:
-            os.unlink(self.SOCKET_PATH)
-        except OSError:
-            pass
-
-        self._server_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._server_sock.bind(self.SOCKET_PATH)
-        self._server_sock.listen(5)
-        os.chmod(self.SOCKET_PATH, 0o660)
-
-        self._client_sockios = []
-
-        self._active = True
-
-    def get_command_object(self) -> tuple:  # format: {"target" : "vm name", "cmd" : "command", "args" : {}}
-
-        cmd_obj = None
-
-        while (not cmd_obj) and self._active:
-
-            rlist = [self._server_sock] + self._client_sockios
-
-            try:
-                readables, _, _ = select.select(rlist, [], [])
-            except OSError:
-                continue
-
-            for readable in readables:
-
-                if readable is self._server_sock:
-                    try:
-                        new_client, addr = self._server_sock.accept()
-                    except OSError:  # Socket closed
-                        continue
-
-                    logging.debug("New control connection!")
-
-                    self._client_sockios.append(BetterSocketIO(new_client))
-
-                else:
-
-                    try:
-
-                        rawdata = readable.readframe()  # may return None... but it does not matter
-
-                    except (ConnectionResetError, BrokenPipeError):
-                        readable.close()
-                        self._client_sockios.remove(readable)
-                        continue
-
-                    try:
-                        data = json.loads(rawdata.decode('utf-8'))
-                    except (json.JSONDecodeError, UnicodeError) as e:  # JSON and Unicode exceptions
-                        logging.error("Connection dropped. Reason: {}".format(str(e)))
-                        readable.close()
-                        self._client_sockios.remove(readable)
-                        continue
-
-                    def result_pusher(result: dict):
-                        if readable:
-                            readable.sendframe(json.dumps(result).encode('utf-8'))
-
-                    cmd_obj = (data, result_pusher)
-
-        return cmd_obj
-
-    def close(self):
-        for client_sockio in self._client_sockios:
-            client_sockio.close()
-
-        self._server_sock.close()
-
-        try:
-            os.unlink(self.SOCKET_PATH)
-        except OSError:
-            pass
-
-        self._active = False
+    return call
 
 
-class SimpleCommandExecuter(object):
+class DaemonControlBase:
+    """
+    This is the base class for the class exposed to clients over XMLRPC
+    Support for vm mapping is implemented here
+    """
 
-    control_command_schema = ControlCommandSchema(many=False)
+    def __init__(self, vm_manager: VMManager):
+        self._vm_manager = vm_manager
 
-    def __init__(self, command_provider: SocketCommandProvider, vmmanager: VMMAnager):
-        self._command_provider = command_provider
-        self._vmmanager = vmmanager
-        self._active = True
+    def _lookup_vm(self, vm_name: str) -> VMInstance:
+        return self._vm_manager.get_vm_instance(vm_name)
 
-    def loop(self):
 
-        while self._active:
-            raw_cmd, result_pusher = self._command_provider.get_command_object() or (None, None)
+class DaemonControl(DaemonControlBase):
+    """
+    This is the class exposed to clients over XMLRPC
+    """
 
-            if not self._active:  # ha a socket closed, akkor az vissza fog térni none-al, a push command meg fasságot küld a geciba
-                break
+    def new(self, description: dict):
+        return self._vm_manager.new(description)
 
-            try:
-                cmd = self.control_command_schema.load(raw_cmd)
-            except ValidationError as e:
-                logging.debug(f"Command schema validation failed: {str(e)}")
-                result_pusher({"success": False, "error": "Invalid command schema"})
-                continue
+    def delete(self, vm_name: str):
+        return self._vm_manager.delete(vm_name)
 
-            # execute the command
+    def get_vm_list(self):
+        vms = self._vm_manager.get_all_vms()
+        return [vm.name for vm in vms]
 
-            logging.debug("Executing command: {}".format(cmd['cmd']))
-            try:
+    @_vm_mapped
+    def start(self, vm: VMInstance):
+        return vm.start()
 
-                result = self._vmmanager.execute_command(
-                    cmd['target'],
-                    cmd['cmd'],
-                    cmd['args']
-                )
+    @_vm_mapped
+    def poweroff(self, vm: VMInstance):
+        return vm.poweroff()
 
-                result_pusher({"success": True, "result": result})
+    @_vm_mapped
+    def terminate(self, vm: VMInstance, kill: bool = False):
+        return vm.terminate(kill)
 
-            except Exception as e:
-                logging.exception(e)
-                result_pusher({"success": False, "error": str(e)})
+    @_vm_mapped
+    def reset(self, vm: VMInstance):
+        return vm.reset()
 
-    def stop(self):
-        self._active = False
-        self._command_provider.close()
+    @_vm_mapped
+    def is_running(self, vm: VMInstance):
+        return vm.is_running
+
+    @_vm_mapped
+    def info(self, vm: VMInstance):
+        return vm.dump_info()
+

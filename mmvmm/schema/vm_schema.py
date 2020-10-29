@@ -19,3 +19,4 @@ class VMSchema(ModelSchema):
     class Meta:
         model = VM
         unknown = RAISE
+        exclude = ['id']  # Id is used internally only and should not be exposed

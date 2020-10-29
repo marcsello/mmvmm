@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
-import logging
-from vm_instance import VM
-
-from exception import UnknownCommandError, UnknownVMError, VMNotRunningError, VMRunningError
-
-from expose import ExposedClass, exposed, transformational
-
+from typing import List
 import time
+import logging
+from vm_instance import VMInstance
+
+from exception import UnknownVMError, VMNotRunningError, VMRunningError
+from schema import VMSchema
+
+from model import SessionMaker, VM
 
 
-class VMMAnager(ExposedClass):  # TODO: Split this into two classes
+class VMManager:
+    vm_schema = VMSchema(many=False, dump_only=['status', 'since', 'pid'])
 
     def __init__(self):
         self._logger = logging.getLogger("manager")
+        self._vm_instances = {}
 
-    ## PUBLIC ##
+        s = SessionMaker()
+
+        vms = s.query(VM).all()
+
+        for vm in vms:
+            self._vm_instances[vm.id] = VMInstance(vm.id)
 
     def close(self, forced: bool = False, timeout: int = 60):
+        """
+        Closes the VM manager.
+        After calling this this manager instance should be discarded
+        """
         at_least_one_powered_on = False
-        for vm in self._vms:
+        for vm in self._vm_instances.values():
             try:
 
                 if forced:
@@ -26,13 +38,15 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
                 else:
                     vm.poweroff()
 
-                self._logger.debug(f"VM {vm.get_name()} is still running...")
+                self._logger.debug(f"VM {vm.name} is still running...")
                 at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
             except VMNotRunningError:
                 pass
 
         if at_least_one_powered_on:
-            self._logger.warning(f"Virtual machines are still running... Waiting for them to power off properly... (timeout: {timeout}sec)")
+            self._logger.warning(
+                f"Virtual machines are still running... Waiting for them to power off properly... (timeout: {timeout}sec)"
+            )
 
             wait_started = time.time()
 
@@ -41,7 +55,7 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
                 if (time.time() - wait_started) > timeout:
                     self._logger.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
-                    for vm in self._vms:
+                    for vm in self._vm_instances.values():
 
                         try:
                             vm.terminate(kill=True)
@@ -50,103 +64,77 @@ class VMMAnager(ExposedClass):  # TODO: Split this into two classes
 
                     break
                 else:
+
                     at_least_one_powered_on = False
-                    for vm in self._vms:
+                    for vm in self._vm_instances.values():
                         if vm.is_running():
                             at_least_one_powered_on = True
 
-        self._vms = []
+        self._vm_instances = {}
 
     def autostart(self):
         """
         Start all VMs marked as autostart.
         """
-        self._logger.info("Starting all VMs marked as autostart.")
-        for vm in self._vms:
-            vm.autostart()
+        s = SessionMaker()
+        autostart_vms = s.query(VM).filter_by(autostart=True).all()
 
-    @exposed
-    def get_list(self) -> list:
-        return list(self._vm_map.keys())
+        for vm in autostart_vms:
+            self._vm_instances[vm.id].start()
 
-    @exposed
-    @transformational
-    def new(self, name: str, description: dict):
-        self._logger.debug(f"Loading VM {name} from description: {description}")
+        self._logger.info(f"VMs marked for autostart are started")
 
-        if name in self._vm_map.keys():
-            raise KeyError("A virtual machine with this name already exists...")
+    def new(self, description: dict):
+        """
+        Creates a new vm based on the description
+        """
+        self._logger.debug(f"Loading VM from description: {description}")
+        s = SessionMaker()
 
-        vm = VM(name, description)
+        new_vm = self.vm_schema.load(description, session=s)
 
-        self._vms.append(vm)
-        self._rebuild_map()
-        self._save(vm)
-        self._logger.info(f"New virtual machine created: {vm.get_name()}")
+        s.add(new_vm)
+        s.commit()
 
-    @exposed
-    @transformational
+        self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
+        self._logger.info(f"New virtual machine created: {new_vm.name} with id: {new_vm.id}")
+
     def delete(self, name: str):
-        vm = self._vm_map[name]
-        vm.destroy()  # If not allowed, this should raise an error
+        """
+        Delete a specific VM
+        Ensures the VM to be stopped
+        """
+        s = SessionMaker()
+        vm = s.query(VM).filter_by(name=name).first()
 
-        # no error raised... continuing
-        self._vms.remove(vm)
-        success = self._objectstore.delete_prefix(f"/virtualmachines/{name}/")
-        if not success:
-            self._logger.error(f"Failed to delete /virtualmachines/{name}/ from etcd!")
+        if not vm:
+            raise UnknownVMError()
 
-        self._rebuild_map()
-        self._logger.info(f"Virtual machine deleted: {name}")
+        if vm.is_running:
+            raise VMRunningError()
 
-    @exposed
-    @transformational
-    def sync(self):
-        # Delete all not running Virtual machines
-        self._logger.info("Syncrhronizing all virtual machines with their descriptions....")
-        nowarn = []
-        for vm_name in self._vm_map.keys():
+        old_name = vm.name
 
-            try:
-                self.delete(vm_name)
-            except VMRunningError:
-                nowarn.append(vm_name)
-                self._logger.warning(f"Couldn't sync {vm_name}. It's still running")
+        s.delete(vm)
+        s.commit()
+        del self._vm_instances[vm.id]  # delete from instances
 
-        # Load them back
-        descriptions = self._objectstore.get_prefix('/virtualmachines')
-        for name, description in descriptions.items():
-            try:
-                self.new(name, description)
-            except KeyError as e:
-                if name not in nowarn:
-                    self._logger.error(f"Couldn't reload {name}. {str(e)} (Duplicate id?)")
+        self._logger.info(f"Virtual machine deleted: {old_name}")
 
-    def execute_command(self, target: str, cmd: str, args: dict) -> object:
+    def get_all_vms(self) -> List[VMInstance]:
+        """
+        Get a list of all valid VM instances
+        """
+        return list(self._vm_instances.values())
 
-        if not target:
-            try:
-                func = self.exposed_functions[cmd]
-            except KeyError:
-                raise UnknownCommandError()
+    def get_vm_instance(self, name: str) -> VMInstance:
+        """
+        Get a VM instance
+        """
+        s = SessionMaker()
+        vm = s.query(VM).filter_by(name=name).first()
 
-            result = func(self, **args)
+        if not vm:
+            raise UnknownVMError()
 
-        else:
-
-            try:
-                vm = self._vm_map[target]
-            except KeyError:
-                raise UnknownVMError()
-
-            try:
-                func = vm.exposed_functions[cmd]
-            except KeyError:
-                raise UnknownCommandError()
-
-            result = func(vm, **args)  # TODO: The func should be an object member already
-
-            if func.transformational:
-                self._save(vm)
-
-        return result
+        return self._vm_instances[vm.id]

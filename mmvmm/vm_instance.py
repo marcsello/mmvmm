@@ -4,9 +4,6 @@ import logging
 import os
 import time
 
-from model.db import Base
-from sqlalchemy import String, Column, Integer, Boolean
-
 from exception import VMRunningError, VMNotRunningError
 from threading import RLock
 
@@ -14,15 +11,18 @@ from tap_device import TAPDevice
 from qmp import QMPMonitor
 from vnc import VNCAllocator
 
+from model import SessionMaker, VM, VMStatus
+from schema import VMSchema
+
 QEMU_BINARY = "/usr/bin/qemu-system-x86_64"
 
 
-class VM(Base):
+class VMInstance:
+    vm_schema = VMSchema(many=False, dump_only=['status', 'since', 'pid'])
 
-    __tablename__ = "vms"
+    def __init__(self, _id: int):
+        self._id = _id
 
-
-    def __init__(self):
         self._logger = logging.getLogger("vm").getChild(self.name)
 
         self._qmp = None
@@ -39,10 +39,10 @@ class VM(Base):
 
     def _poweroff_cleanup(self, timeout: int = 5):
 
-        if self.is_running():
+        if self.is_running:
             self._logger.info(f"Qemu process still running. Delaying cleanup. (max. {timeout}sec)")
             wait_started = time.time()
-            while self.is_running():
+            while self.is_running:
                 time.sleep(1)
                 if (time.time() - wait_started) > 5:
                     self._logger.warning("Cleanup delay expired. Killing Qemu!")
@@ -58,13 +58,13 @@ class VM(Base):
 
     def _enforce_vm_state(self, running: bool):
 
-        if running != self.is_running():
-            if self.is_running():
+        if running != self.is_running:
+            if self.is_running:
                 raise VMRunningError()
             else:
                 raise VMNotRunningError()
 
-    def _start(self):
+    def start(self):
         with self._lock:
             self._enforce_vm_state(False)
 
@@ -100,7 +100,7 @@ class VM(Base):
             else:
                 args += ['-display', 'none']
 
-             # Create QMP monitor
+            # Create QMP monitor
             self._qmp = QMPMonitor(self._logger)
             self._qmp.register_event_listener('SHUTDOWN', lambda data: self._poweroff_cleanup())  # meh
 
@@ -122,14 +122,15 @@ class VM(Base):
 
             # add media
             for media in hardware_desciption['media']:
-                args += ['-drive', f"media={media['type']},format={media['format']},file={media['path'].replace(',',',,')},read-only={'on' if media['readonly'] else 'off'}"]
+                args += ['-drive',
+                         f"media={media['type']},format={media['format']},file={media['path'].replace(',', ',,')},read-only={'on' if media['readonly'] else 'off'}"]
 
             # add nic
             for network in hardware_desciption['network']:
                 tapdev = TAPDevice(network['master'])
                 self._tapdevs.append(tapdev)
 
-                netdevid = f"{self._name}net{len(self._tapdevs)-1}"
+                netdevid = f"{self._name}net{len(self._tapdevs) - 1}"
 
                 args += ['-netdev', f"tap,id={netdevid},ifname={tapdev.device},script=no,downscript=no"]
                 args += ['-device', f"{network['model']},netdev={netdevid},mac={network['mac']}"]
@@ -140,7 +141,7 @@ class VM(Base):
             self._process = subprocess.Popen(args, preexec_fn=VM._preexec)  # start the qemu process itself
             self._qmp.start()  # Start the QMP monitor
 
-    def _poweroff(self):
+    def poweroff(self):
         with self._lock:
             self._enforce_vm_state(True)
 
@@ -149,10 +150,11 @@ class VM(Base):
             try:
                 self._qmp.send_command({"execute": "system_powerdown"})
             except ConnectionError:  # There was a QMP connection error... Sending SIGTERM to process instead
-                self._logger.warning("There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
+                self._logger.warning(
+                    "There was a QMP connection error while attempting to power off the VM. Sending SIGTERM to QEMU instead...")
                 self.terminate(False)
 
-    def _terminate(self, kill=False):
+    def terminate(self, kill=False):
         with self._lock:
             self._enforce_vm_state(True)
 
@@ -165,28 +167,33 @@ class VM(Base):
                 self._process.terminate()
                 # Poweroff cleanup will be triggered by QMP event
 
-
-    def _reset(self):
+    def reset(self):
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Resetting VM...")
             self._qmp.send_command({"execute": "system_reset"})
 
-
-    def _pause(self):
+    def pause(self):
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Pausing VM...")
             self._qmp.send_command({"execute": "stop"})
 
-
-    def _cont(self):  # continue
+    def cont(self):  # continue
         with self._lock:
             self._enforce_vm_state(True)
             self._logger.info("Continuing VM...")
             self._qmp.send_command({"execute": "cont"})
 
-    def _is_running(self) -> bool:
+    def dump_info(self) -> dict:
+        s = SessionMaker()
+        vm = s.query(VM).get(self._id)
+        return self.vm_schema.dump(vm)
+
+    # Basic getters
+
+    @property
+    def is_running(self) -> bool:
         with self._lock:
             if not self._process:
                 return False
@@ -194,3 +201,12 @@ class VM(Base):
             # the process object exists
             return self._process.poll() is None
 
+    @property
+    def id(self) -> int:
+        return self._id
+
+    @property
+    def name(self) -> str:
+        s = SessionMaker()
+        vm = s.query(VM).get(self._id)
+        return vm.name

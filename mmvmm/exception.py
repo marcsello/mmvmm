@@ -7,12 +7,6 @@ class VMManagerError(Exception):
         return "Virtual machine manager error"
 
 
-class UnknownCommandError(VMManagerError):
-
-    def __str__(self):
-        return "Unknown command error"
-
-
 class UnknownVMError(VMManagerError):
 
     def __str__(self):

@@ -2,3 +2,4 @@ sqlalchemy
 marshmallow
 marshmallow-sqlalchemy
 marshmallow-enum
+bettersocket

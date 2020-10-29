@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-# TODO: This module could use a LOT of work
 from bettersocket import BetterSocketIO
 import json
 
 
-class JSONSocketWrapper(object):
+class JSONSocketWrapper:
 
     def __init__(self, bsocket: BetterSocketIO):
         self._bsocket = bsocket
