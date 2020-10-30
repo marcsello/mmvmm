@@ -20,6 +20,6 @@ class Hardware(Base):
     __table_args__ = (
         CheckConstraint(ram_m >= 1, name='ram_positive'),
         CheckConstraint(cpus >= 1, name='cpus_positive'),
-        CheckConstraint(boot in ['c', 'n', 'd'], name='boot_valid'),
+        CheckConstraint("boot IN ('c', 'n', 'd')", name='boot_valid'),
         {}
     )
