@@ -13,7 +13,7 @@ import logging
 
 from bettersocket import BetterSocketIO
 from utils import JSONSocketWrapper
-
+from config import Config
 from vm_commands import VMCommandBase, VMQMPShutdownCommand, VMQMPNegotiationCompleteCommand, \
     VMQMPNegotiationFailedCommand, VMQMPConnectionProblemsCommand
 
@@ -43,7 +43,7 @@ class QMPMonitor(Thread):
         matches = 0
         while True:
             random_string = ''.join(random.choice(string.ascii_lowercase) for _ in range(12 + matches))
-            sock_path = os.path.join("/run", "mmvmm", f"qmp_{random_string}.sock")
+            sock_path = os.path.join(Config.QMP_SOCKETS_DIR, f"qmp_{random_string}.sock")
             if not os.path.exists(sock_path):
                 matches += 1
             else:

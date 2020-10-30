@@ -4,6 +4,8 @@ import sys
 import logging
 import signal
 
+from config import Config
+
 from vm_manager import VMManager
 from control import DaemonControl
 from model import create_all
@@ -16,15 +18,17 @@ def main():
         filename="", format="%(asctime)s - %(name)s [%(levelname)s]: %(message)s",
         level=logging.DEBUG if '--debug' in sys.argv else logging.INFO
     )
+    if '--debug' in sys.argv:
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")
     create_all()
-    os.makedirs("/run/mmvmm", mode=0o770, exist_ok=True)
+    os.makedirs(Config.SOCKET_DIR, mode=0o770, exist_ok=True)
+    os.makedirs(Config.QMP_SOCKETS_DIR, mode=0o770, exist_ok=True)
 
     vm_manager = VMManager()
 
-
-
-    with UnixStreamXMLRPCServer("/run/mmvmm/control.sock") as server:
+    with UnixStreamXMLRPCServer(Config.CONTROL_SOCKET_PATH) as server:
         server.register_introspection_functions()
         server.register_instance(DaemonControl(vm_manager))
 
@@ -43,7 +47,7 @@ def main():
 
         server.serve_forever()
 
-    os.remove("/run/mmvmm/control.sock")
+    os.remove(Config.CONTROL_SOCKET_PATH)
 
     logging.info("Stopping MMVMM...")
     vm_manager.close()

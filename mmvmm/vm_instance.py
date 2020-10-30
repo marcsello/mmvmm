@@ -8,6 +8,7 @@ import time
 from threading import Thread, Lock
 import queue
 
+from config import Config
 from exception import VMRunningError, VMNotRunningError, VMError
 from tap_device import TAPDevice
 from qmp import QMPMonitor
@@ -18,7 +19,6 @@ from sqlalchemy import func
 
 from vm_commands import VMTerminateCommand, VMPoweroffCommand, VMStartCommand
 
-QEMU_BINARY = "/usr/bin/qemu-system-x86_64"
 
 
 class VMInstance(Thread):
@@ -102,7 +102,7 @@ class VMInstance(Thread):
     @staticmethod
     def _compile_args(vm: VM, qmp_path: str) -> list:
         # === QEMU Setup ===
-        args = [QEMU_BINARY, '-monitor', 'none']  # Monitor none disables the QEMU command prompt
+        args = [Config.QEMU_PATH, '-monitor', 'none']  # Monitor none disables the QEMU command prompt
 
         # Could be set to telnet or other device
         args += ['-serial', 'null']
