@@ -28,26 +28,32 @@ def main():
 
     vm_manager = VMManager()
 
-    with UnixStreamXMLRPCServer(Config.CONTROL_SOCKET_PATH) as server:
-        server.register_introspection_functions()
-        server.register_instance(DaemonControl(vm_manager))
+    try:
+        with UnixStreamXMLRPCServer(Config.CONTROL_SOCKET_PATH) as server:
+            server.register_introspection_functions()
+            server.register_instance(DaemonControl(vm_manager))
 
-        def signal_handler(signum, frame):
-            logging.warning(f"Signal {signum} recieved. Exiting...")
-            server._BaseServer__shutdown_request = True
-            # this really is the cleanest solution...
-            # shutdown() would block until the server exists... but this would cause a dead-lock
+            def signal_handler(signum, frame):
+                logging.warning(f"Signal {signum} recieved. Exiting...")
+                server._BaseServer__shutdown_request = True
+                # this really is the cleanest solution...
+                # shutdown() would block until the server exists... but this would cause a dead-lock
 
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
-        logging.info("MMVMM is ready!")
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+            logging.info("MMVMM is ready!")
 
-        if '--no-autostart' not in sys.argv:
-            vm_manager.autostart()
+            if '--no-autostart' not in sys.argv:
+                vm_manager.autostart()
 
-        server.serve_forever()
+            server.serve_forever()
 
-    os.remove(Config.CONTROL_SOCKET_PATH)
+        os.remove(Config.CONTROL_SOCKET_PATH)
+
+    except OSError as e:
+        logging.error(str(e))
+        # Address already in use
+        pass
 
     logging.info("Stopping MMVMM...")
     vm_manager.close()

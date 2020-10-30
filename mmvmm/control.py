@@ -8,7 +8,7 @@ def _vm_mapped(f):
     @wraps(f)
     def call(self, vm_name: str, *args, **kwargs):
         vm = self._lookup_vm(vm_name)
-        f(self, vm, *args, **kwargs)
+        return f(self, vm, *args, **kwargs)
 
     return call
 
@@ -39,7 +39,7 @@ class DaemonControl(DaemonControlBase):
 
     def get_vm_list(self):
         vms = self._vm_manager.get_all_vms()
-        return [vm.name for vm in vms]
+        return [vm.vm_name for vm in vms]
 
     @_vm_mapped
     def start(self, vm: VMInstance):

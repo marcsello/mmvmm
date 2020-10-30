@@ -21,6 +21,6 @@ class Media(Base):
     host_cache = Column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
-        CheckConstraint(type in ['cdrom', 'disk'], name='type_valid'),
+        CheckConstraint("type IN ('cdrom', 'disk')", name='type_valid'),
         {}
     )

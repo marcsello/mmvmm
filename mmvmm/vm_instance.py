@@ -36,7 +36,10 @@ class VMInstance(Thread):
         self._lock = Lock()
         self._command_queue = queue.Queue()
 
-        self._logger = logging.getLogger("vm").getChild(self.name)
+        name = self.vm_name
+
+        self._logger = logging.getLogger("vm").getChild(name)
+        self.setName("Event Loop of " + name)
 
     def _get_session_and_model(self) -> Tuple[SessionMaker, VM]:
         s = SessionMaker()
@@ -62,6 +65,9 @@ class VMInstance(Thread):
             s.add(vm)
             if not session:
                 s.commit()
+        else:
+            if not session:
+                s.rollback()
 
     @staticmethod
     def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
@@ -74,10 +80,10 @@ class VMInstance(Thread):
         """
         self._update_status(VMStatus.STOPPING)  # In case it wasn't set
 
-        if self.is_process_alive:
+        if self._is_process_alive:
             self._logger.info(f"Qemu process still running. Delaying cleanup. (max. {timeout}sec)")
             wait_started = time.time()
-            while self.is_process_alive:
+            while self._is_process_alive:
                 time.sleep(1)
                 if (time.time() - wait_started) > timeout:
                     self._logger.warning("Cleanup delay expired. Killing Qemu!")
@@ -93,8 +99,8 @@ class VMInstance(Thread):
         self._update_status(VMStatus.STOPPED)
 
     def _enforce_vm_state(self, running: bool):
-        if running != self.is_process_alive:
-            if self.is_process_alive:
+        if running != self._is_process_alive:
+            if self._is_process_alive:
                 raise VMRunningError()
             else:
                 raise VMNotRunningError()
@@ -154,7 +160,7 @@ class VMInstance(Thread):
     def _investigate_vm_onlineness(self):
         # Called when there are problems with the QMP connection
         s, vm = self._get_session_and_model()
-        if not self.is_process_alive:
+        if not self._is_process_alive:
             if vm.status == VMStatus.RUNNING:
                 # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
                 self._update_status(VMStatus.STOPPED, s)
@@ -226,14 +232,23 @@ class VMInstance(Thread):
         self._logger.info("Resetting VM...")
         self._qmp.send_command({"execute": "system_reset"})
 
+
+    def _is_process_alive(self) -> bool:
+        if not self._process:
+            return False
+
+        # the process object exists
+        return self._process.poll() is None
+
     def _run_periodic_tasks(self):
         s, vm = self._get_session_and_model()
-        if not self.is_process_alive:
+        if not self._is_process_alive:
             if vm.status == VMStatus.RUNNING:
                 # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
                 self._update_status(VMStatus.STOPPED, s)
                 self._logger.warning("It seems like the QEMU process is crashed, and it went unnoticed")
                 s.commit()
+
 
     def run(self):  # Main event loop
         self._update_status(VMStatus.STOPPED)  # Ensure that it's stopped before performing any commands
@@ -276,32 +291,33 @@ class VMInstance(Thread):
         with self._lock:
             s = SessionMaker()
             vm = s.query(VM).get(self._id)
-            return self.vm_schema.dump(vm)
-
+            info = self.vm_schema.dump(vm)
+            s.rollback()
+            return info
     # Basic getters
 
     @property
     def is_process_alive(self) -> bool:
         with self._lock:
-            if not self._process:
-                return False
-
-            # the process object exists
-            return self._process.poll() is None
+            return self._is_process_alive()
 
     @property
     def status(self) -> VMStatus:
         s = SessionMaker()
         vm = s.query(VM).get(self._id)
-        return vm.status
+        status = vm.status
+        s.rollback()
+        return status
 
     @property
     def id(self) -> int:
         return self._id
 
     @property
-    def name(self) -> str:
-        with self._lock:
-            s = SessionMaker()
-            vm = s.query(VM).get(self._id)
-            return vm.name
+    # Fun fact: ''name'' overrides Thread.name causing SQLAlchemy logging to go nuts, when it tries to lookup the thread name to log the looking up the name of the thread
+    def vm_name(self) -> str:
+        s = SessionMaker()
+        vm = s.query(VM).get(self._id)
+        name = vm.name
+        s.rollback()
+        return name

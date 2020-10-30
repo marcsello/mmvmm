@@ -39,7 +39,7 @@ class VMManager:
                 else:
                     vm.poweroff()
 
-                self._logger.debug(f"VM {vm.name} is still running...")
+                self._logger.debug(f"VM {vm.vm_name} is still running...")
                 at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
             except VMNotRunningError:
                 pass
@@ -68,7 +68,7 @@ class VMManager:
 
                     at_least_one_powered_on = False
                     for vm in self._vm_instances.values():
-                        if vm.is_process_alive():
+                        if vm.is_process_alive:
                             at_least_one_powered_on = True
 
         for vm in self._vm_instances.values():
