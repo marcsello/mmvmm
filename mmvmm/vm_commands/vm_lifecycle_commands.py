@@ -14,6 +14,12 @@ class VMPoweroffCommand(VMCommandBase):
         vm_instance._perform_poweroff()
 
 
+class VMResetCommand(VMCommandBase):
+
+    def execute(self, vm_instance):
+        vm_instance._perform_reset()
+
+
 class VMTerminateCommand(VMCommandBase):
 
     def __init__(self, kill: bool = False):

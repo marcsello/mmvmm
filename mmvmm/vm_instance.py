@@ -15,15 +15,18 @@ from exception import VMRunningError, VMNotRunningError, VMError
 from tap_device import TAPDevice
 from qmp import QMPMonitor
 
-from model import VM, VMStatus, Session
-from schema import VMSchema
+from model import VM, VMStatus, NIC, Media, Session
+from schema import VMSchema, HardwareSchema, NICSchema, MediaSchema
 from sqlalchemy import func
 
-from vm_commands import VMTerminateCommand, VMPoweroffCommand, VMStartCommand
+from vm_commands import VMTerminateCommand, VMPoweroffCommand, VMResetCommand, VMStartCommand
 
 
 class VMInstance(Thread):
     vm_schema = VMSchema(many=False, dump_only=['status', 'since', 'pid'])
+    hardware_schema = HardwareSchema(many=False, dump_only=['vm', 'vm_id', 'nic', 'media'])
+    nic_schema = NICSchema(many=False, dump_only=['hardware', 'hardware_id'])
+    media_schema = MediaSchema(many=False, dump_only=['hardware', 'hardware_id'])
 
     def __init__(self, _id: int):
         super().__init__()
@@ -196,8 +199,8 @@ class VMInstance(Thread):
 
             self._logger.debug(f"Executing command {' '.join(qemu_command)}")
             try:
-                self._process = subprocess.Popen(qemu_command,
-                                                 preexec_fn=self._preexec)  # start the qemu process itself
+                # start the qemu process itself
+                self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)
             except FileNotFoundError as e:
                 self._logger.error(f"Could not launch VM: {e}")
                 self._update_status(VMStatus.STOPPED)
@@ -284,6 +287,9 @@ class VMInstance(Thread):
     def poweroff(self):
         self._command_queue.put(VMPoweroffCommand())
 
+    def reset(self):
+        self._command_queue.put(VMResetCommand())
+
     def terminate(self, kill: bool = False):
         self._command_queue.put(VMTerminateCommand(kill))
 
@@ -299,6 +305,59 @@ class VMInstance(Thread):
             with Session() as s:
                 vm = s.query(VM).get(self._id)
                 return self.vm_schema.dump(vm)
+
+    def set_autostart(self, autostart: bool):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            vm.autostart = autostart
+            s.add(vm)
+            s.commit()
+
+    def update_hardware(self, description: dict):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            hw = vm.hardware
+            hw = self.hardware_schema.load(description, instance=hw, partial=True, session=s)
+            s.add(hw)
+            s.commit()
+
+    def add_nic(self, description: dict):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            hw = vm.hardware
+            new_nic = self.nic_schema.load(description, session=s)
+            new_nic.hardware = hw
+            s.add(new_nic)
+            s.commit()
+
+    def del_nic(self, _id: int):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            hw = vm.hardware
+            nic = s.query(NIC).filter(NIC.id == _id, NIC.hardware_id == hw.vm_id).first()
+            if not nic:
+                raise ValueError("Unknown interface")
+            s.delete(nic)
+            s.commit()
+
+    def add_media(self, description: dict):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            hw = vm.hardware
+            new_media = self.media_schema.load(description, session=s)
+            new_media.hardware = hw
+            s.add(new_media)
+            s.commit()
+
+    def del_media(self, _id: int):
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            hw = vm.hardware
+            media = s.query(Media).filter(Media.id == _id, Media.hardware_id == hw.vm_id).first()
+            if not media:
+                raise ValueError("Unknown media")
+            s.delete(media)
+            s.commit()
 
     # Basic getters
 

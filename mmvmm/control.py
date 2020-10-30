@@ -62,6 +62,33 @@ class DaemonControl(DaemonControlBase):
         return vm.is_process_alive
 
     @_vm_mapped
+    def set_autostart(self, vm: VMInstance, autostart: bool):
+        return vm.set_autostart(autostart)
+
+    @_vm_mapped
+    def update_hardware(self, vm: VMInstance, description: dict):
+        return vm.update_hardware(description)
+
+    # NIC stuff
+
+    @_vm_mapped
+    def add_nic(self, vm: VMInstance, description: dict):
+        return vm.add_nic(description)
+
+    @_vm_mapped
+    def del_nic(self, vm: VMInstance, _id: int):
+        return vm.del_nic(_id)
+
+    # Media stuff
+
+    @_vm_mapped
+    def add_media(self, vm: VMInstance, description: dict):
+        return vm.add_media(description)
+
+    @_vm_mapped
+    def del_media(self, vm: VMInstance, _id: int):
+        return vm.del_media(_id)
+
+    @_vm_mapped
     def info(self, vm: VMInstance):
         return vm.dump_info()
-
