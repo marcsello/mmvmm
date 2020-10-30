@@ -18,7 +18,7 @@ def main():
         filename="", format="%(asctime)s - %(name)s [%(levelname)s]: %(message)s",
         level=logging.DEBUG if '--debug' in sys.argv else logging.INFO
     )
-    if '--debug' in sys.argv:
+    if '--debug-sqlalchemy' in sys.argv:
         logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
 
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")

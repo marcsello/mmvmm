@@ -44,7 +44,7 @@ class QMPMonitor(Thread):
         while True:
             random_string = ''.join(random.choice(string.ascii_lowercase) for _ in range(12 + matches))
             sock_path = os.path.join(Config.QMP_SOCKETS_DIR, f"qmp_{random_string}.sock")
-            if not os.path.exists(sock_path):
+            if os.path.exists(sock_path):
                 matches += 1
             else:
                 return sock_path
@@ -147,7 +147,7 @@ class QMPMonitor(Thread):
             if "event" in data:
                 event = data['event']
                 self._logger.debug(f"Event happened: {event}")
-                self._handle_event(event, data['data'])
+                self._handle_event(event, data)
 
             elif "return" in data:
                 self._logger.debug("Command successful")

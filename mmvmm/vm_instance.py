@@ -74,14 +74,16 @@ class VMInstance(Thread):
         """
         self._update_status(VMStatus.STOPPING)  # In case it wasn't set
 
-        if self._is_process_alive:
+        if self._is_process_alive():
             self._logger.info(f"Qemu process still running. Delaying cleanup. (max. {timeout}sec)")
             wait_started = time.time()
-            while self._is_process_alive:
+            while self._is_process_alive():
                 time.sleep(1)
                 if (time.time() - wait_started) > timeout:
                     self._logger.warning("Cleanup delay expired. Killing Qemu!")
                     self._process.kill()
+                    self._process.wait()
+                    break
 
         self._logger.debug("Cleaning up...")
         for tapdev in self._tapdevs:
@@ -93,8 +95,8 @@ class VMInstance(Thread):
         self._update_status(VMStatus.STOPPED)
 
     def _enforce_vm_state(self, running: bool):
-        if running != self._is_process_alive:
-            if self._is_process_alive:
+        if running != self._is_process_alive():
+            if self._is_process_alive():
                 raise VMRunningError()
             else:
                 raise VMNotRunningError()
@@ -155,7 +157,7 @@ class VMInstance(Thread):
         # Called when there are problems with the QMP connection
         with Session() as s:
             vm = s.query(VM).get(self._id)
-            if not self._is_process_alive:
+            if not self._is_process_alive():
                 if vm.status == VMStatus.RUNNING:
                     # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
                     self._update_status(VMStatus.STOPPED, s)
@@ -167,7 +169,6 @@ class VMInstance(Thread):
         self._update_status(VMStatus.STARTING)
         with Session() as s:
             vm = s.query(VM).get(self._id)
-
             self._logger.info("Starting VM...")
 
             # The VM is not running. It's safe to kill off the QMP Monitor
@@ -184,12 +185,23 @@ class VMInstance(Thread):
             # Create tap devices
             self._logger.debug("Creating tap devices...")
             for nic in vm.hardware.nic:
-                tapdev = TAPDevice(nic.id, nic.master, nic.mtu)
+                try:
+                    tapdev = TAPDevice(nic.id, nic.master, nic.mtu)
+                except subprocess.CalledProcessError as e:
+                    self._logger.error(f"Could not create TAP device: {e}! Aborting VM startup...")
+                    self._update_status(VMStatus.STOPPED)
+                    return
+
                 self._logger.debug(f"{tapdev.device} created!")
                 self._tapdevs.append(tapdev)
 
             self._logger.debug(f"Executing command {' '.join(qemu_command)}")
-            self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)  # start the qemu process itself
+            try:
+                self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)  # start the qemu process itself
+            except FileNotFoundError as e:
+                self._logger.error(f"Could not launch VM: {e}")
+                self._update_status(VMStatus.STOPPED)
+                return
 
             vm.pid = self._process.pid
             self._qmp.start()  # Start the QMP monitor (A negotiation event will mark the VM running)
@@ -239,7 +251,7 @@ class VMInstance(Thread):
     def _run_periodic_tasks(self):
         with Session() as s:
             vm = s.query(VM).get(self._id)
-            if not self._is_process_alive:
+            if not self._is_process_alive():
                 if vm.status == VMStatus.RUNNING:
                     # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
                     self._update_status(VMStatus.STOPPED, s)
