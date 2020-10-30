@@ -113,7 +113,7 @@ class VMManager:
             if not vm:
                 raise UnknownVMError()
 
-            if vm.is_process_alive:
+            if vm.status != VMStatus.STOPPED:
                 raise VMRunningError()
 
             self._vm_instances[vm.id].stop_eventloop()
