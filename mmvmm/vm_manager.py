@@ -7,7 +7,7 @@ from vm_instance import VMInstance
 from exception import UnknownVMError, VMNotRunningError, VMRunningError
 from schema import VMSchema
 
-from model import SessionMaker, VM
+from model import VM, Session
 
 
 class VMManager:
@@ -17,13 +17,12 @@ class VMManager:
         self._logger = logging.getLogger("manager")
         self._vm_instances = {}
 
-        s = SessionMaker()
+        with Session() as s:
+            vms = s.query(VM).all()
 
-        vms = s.query(VM).all()
-
-        for vm in vms:
-            self._vm_instances[vm.id] = VMInstance(vm.id)
-            self._vm_instances[vm.id].start_eventloop()
+            for vm in vms:
+                self._vm_instances[vm.id] = VMInstance(vm.id)
+                self._vm_instances[vm.id].start_eventloop()
 
     def close(self, forced: bool = False, timeout: int = 60):
         """
@@ -82,11 +81,11 @@ class VMManager:
         """
         Start all VMs marked as autostart.
         """
-        s = SessionMaker()
-        autostart_vms = s.query(VM).filter_by(autostart=True).all()
+        with Session() as s:
+            autostart_vms = s.query(VM).filter_by(autostart=True).all()
 
-        for vm in autostart_vms:
-            self._vm_instances[vm.id].start()
+            for vm in autostart_vms:
+                self._vm_instances[vm.id].start()
 
         self._logger.info(f"VMs marked for autostart are started")
 
@@ -95,37 +94,38 @@ class VMManager:
         Creates a new vm based on the description
         """
         self._logger.debug(f"Loading VM from description: {description}")
-        s = SessionMaker()
+        with Session() as s:
 
-        new_vm = self.vm_schema.load(description, session=s)
+            new_vm = self.vm_schema.load(description, session=s)
 
-        s.add(new_vm)
-        s.commit()
+            s.add(new_vm)
+            s.commit()
 
-        self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
-        self._vm_instances[new_vm.id].start_eventloop()
-        self._logger.info(f"New virtual machine created: {new_vm.name} with id: {new_vm.id}")
+            self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
+            self._vm_instances[new_vm.id].start_eventloop()
+            self._logger.info(f"New virtual machine created: {new_vm.name} with id: {new_vm.id}")
 
     def delete(self, name: str):
         """
         Delete a specific VM
         Ensures the VM to be stopped
         """
-        s = SessionMaker()
-        vm = s.query(VM).filter_by(name=name).first()
+        with Session() as s:
+            vm = s.query(VM).filter_by(name=name).first()
 
-        if not vm:
-            raise UnknownVMError()
+            if not vm:
+                raise UnknownVMError()
 
-        if vm.is_process_alive:
-            raise VMRunningError()
+            if vm.is_process_alive:
+                raise VMRunningError()
 
-        self._vm_instances[vm.id].stop_eventloop()
-        old_name = vm.name
+            self._vm_instances[vm.id].stop_eventloop()
+            old_name = vm.name
+            old_id = vm.id
 
-        s.delete(vm)
-        s.commit()
-        del self._vm_instances[vm.id]  # delete from instances
+            s.delete(vm)
+            s.commit()
+        del self._vm_instances[old_id]  # delete from instances
 
         self._logger.info(f"Virtual machine deleted: {old_name}")
 
@@ -139,10 +139,12 @@ class VMManager:
         """
         Get a VM instance
         """
-        s = SessionMaker()
-        vm = s.query(VM).filter_by(name=name).first()
+        with Session() as s:
+            vm = s.query(VM).filter_by(name=name).first()
 
-        if not vm:
-            raise UnknownVMError()
+            if not vm:
+                raise UnknownVMError()
 
-        return self._vm_instances[vm.id]
+            _id = vm.id
+
+        return self._vm_instances[_id]

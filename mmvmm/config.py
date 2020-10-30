@@ -8,3 +8,4 @@ class Config:
     CONTROL_SOCKET_PATH = os.path.join(os.environ.get("SOCKET_DIR", "/run/mmvmm"), 'control.sock')
     QMP_SOCKETS_DIR = os.path.join(os.environ.get("SOCKET_DIR", "/run/mmvmm"), 'internal')
     QEMU_PATH = os.environ.get("QEMU_PATH", "/usr/bin/qemu-system-x86_64")
+    DATABASE_URI = os.environ.get("DATABASE_URI", "sqlite:////tmp/mmvmm.db")

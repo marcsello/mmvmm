@@ -5,6 +5,8 @@ import logging
 import os
 import time
 
+from sqlalchemy.orm import Session
+
 from threading import Thread, Lock
 import queue
 
@@ -13,7 +15,7 @@ from exception import VMRunningError, VMNotRunningError, VMError
 from tap_device import TAPDevice
 from qmp import QMPMonitor
 
-from model import SessionMaker, VM, VMStatus
+from model import VM, VMStatus, Session
 from schema import VMSchema
 from sqlalchemy import func
 
@@ -41,11 +43,6 @@ class VMInstance(Thread):
         self._logger = logging.getLogger("vm").getChild(name)
         self.setName("Event Loop of " + name)
 
-    def _get_session_and_model(self) -> Tuple[SessionMaker, VM]:
-        s = SessionMaker()
-        vm = s.query(VM).get(self._id)
-        return s, vm
-
     def _update_status(self, new_status: VMStatus, session=None):
         """
         Updates the VM status stored in the database
@@ -54,20 +51,17 @@ class VMInstance(Thread):
         If you do provide a session, do not forget to commit it manually.
         """
         if session:
-            s = session
-            vm = s.query(VM).get(self._id)
-        else:
-            s, vm = self._get_session_and_model()
-
-        if vm.status != new_status:
+            vm = session.query(VM).get(self._id)
             vm.status = new_status
             vm.since = func.now()
-            s.add(vm)
-            if not session:
-                s.commit()
+            session.add(vm)
         else:
-            if not session:
-                s.rollback()
+            with Session() as s:
+                vm = s.query(VM).get(self._id)
+                vm.status = new_status
+                vm.since = func.now()
+                s.add(vm)
+                s.commit()
 
     @staticmethod
     def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
@@ -159,46 +153,48 @@ class VMInstance(Thread):
 
     def _investigate_vm_onlineness(self):
         # Called when there are problems with the QMP connection
-        s, vm = self._get_session_and_model()
-        if not self._is_process_alive:
-            if vm.status == VMStatus.RUNNING:
-                # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
-                self._update_status(VMStatus.STOPPED, s)
-                self._logger.warning("It seems like the QEMU process is crashed")
-                s.commit()
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            if not self._is_process_alive:
+                if vm.status == VMStatus.RUNNING:
+                    # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
+                    self._update_status(VMStatus.STOPPED, s)
+                    self._logger.warning("It seems like the QEMU process is crashed")
+                    s.commit()
 
     def _perform_start(self):
         self._enforce_vm_state(False)
         self._update_status(VMStatus.STARTING)
-        s, vm = self._get_session_and_model()
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
 
-        self._logger.info("Starting VM...")
+            self._logger.info("Starting VM...")
 
-        # The VM is not running. It's safe to kill off the QMP Monitor
-        if self._qmp and self._qmp.is_alive():
-            self._logger.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
-            self._qmp.disconnect(cleanup=True)
-            self._qmp.join()
+            # The VM is not running. It's safe to kill off the QMP Monitor
+            if self._qmp and self._qmp.is_alive():
+                self._logger.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
+                self._qmp.disconnect(cleanup=True)
+                self._qmp.join()
 
-        # Create QMP monitor
-        self._qmp = QMPMonitor(self._logger, self._command_queue)
+            # Create QMP monitor
+            self._qmp = QMPMonitor(self._logger, self._command_queue)
 
-        qemu_command = self._compile_args(vm, self._qmp.get_sock_path())
+            qemu_command = self._compile_args(vm, self._qmp.get_sock_path())
 
-        # Create tap devices
-        self._logger.debug("Creating tap devices...")
-        for nic in vm.hardware.nic:
-            tapdev = TAPDevice(nic.id, nic.master, nic.mtu)
-            self._logger.debug(f"{tapdev.device} created!")
-            self._tapdevs.append(tapdev)
+            # Create tap devices
+            self._logger.debug("Creating tap devices...")
+            for nic in vm.hardware.nic:
+                tapdev = TAPDevice(nic.id, nic.master, nic.mtu)
+                self._logger.debug(f"{tapdev.device} created!")
+                self._tapdevs.append(tapdev)
 
-        self._logger.debug(f"Executing command {' '.join(qemu_command)}")
-        self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)  # start the qemu process itself
+            self._logger.debug(f"Executing command {' '.join(qemu_command)}")
+            self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)  # start the qemu process itself
 
-        vm.pid = self._process.pid
-        self._qmp.start()  # Start the QMP monitor (A negotiation event will mark the VM running)
-        s.add(vm)
-        s.commit()
+            vm.pid = self._process.pid
+            self._qmp.start()  # Start the QMP monitor (A negotiation event will mark the VM running)
+            s.add(vm)
+            s.commit()
 
     def _perform_poweroff(self):
         self._enforce_vm_state(True)
@@ -241,13 +237,14 @@ class VMInstance(Thread):
         return self._process.poll() is None
 
     def _run_periodic_tasks(self):
-        s, vm = self._get_session_and_model()
-        if not self._is_process_alive:
-            if vm.status == VMStatus.RUNNING:
-                # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
-                self._update_status(VMStatus.STOPPED, s)
-                self._logger.warning("It seems like the QEMU process is crashed, and it went unnoticed")
-                s.commit()
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            if not self._is_process_alive:
+                if vm.status == VMStatus.RUNNING:
+                    # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
+                    self._update_status(VMStatus.STOPPED, s)
+                    self._logger.warning("It seems like the QEMU process is crashed, and it went unnoticed")
+                    s.commit()
 
 
     def run(self):  # Main event loop
@@ -289,11 +286,10 @@ class VMInstance(Thread):
 
     def dump_info(self) -> dict:
         with self._lock:
-            s = SessionMaker()
-            vm = s.query(VM).get(self._id)
-            info = self.vm_schema.dump(vm)
-            s.rollback()
-            return info
+            with Session() as s:
+                vm = s.query(VM).get(self._id)
+                return self.vm_schema.dump(vm)
+
     # Basic getters
 
     @property
@@ -303,11 +299,9 @@ class VMInstance(Thread):
 
     @property
     def status(self) -> VMStatus:
-        s = SessionMaker()
-        vm = s.query(VM).get(self._id)
-        status = vm.status
-        s.rollback()
-        return status
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            return vm.status
 
     @property
     def id(self) -> int:
@@ -316,8 +310,6 @@ class VMInstance(Thread):
     @property
     # Fun fact: ''name'' overrides Thread.name causing SQLAlchemy logging to go nuts, when it tries to lookup the thread name to log the looking up the name of the thread
     def vm_name(self) -> str:
-        s = SessionMaker()
-        vm = s.query(VM).get(self._id)
-        name = vm.name
-        s.rollback()
-        return name
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            return vm.name
