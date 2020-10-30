@@ -22,7 +22,6 @@ from sqlalchemy import func
 from vm_commands import VMTerminateCommand, VMPoweroffCommand, VMStartCommand
 
 
-
 class VMInstance(Thread):
     vm_schema = VMSchema(many=False, dump_only=['status', 'since', 'pid'])
 
@@ -197,7 +196,8 @@ class VMInstance(Thread):
 
             self._logger.debug(f"Executing command {' '.join(qemu_command)}")
             try:
-                self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)  # start the qemu process itself
+                self._process = subprocess.Popen(qemu_command,
+                                                 preexec_fn=self._preexec)  # start the qemu process itself
             except FileNotFoundError as e:
                 self._logger.error(f"Could not launch VM: {e}")
                 self._update_status(VMStatus.STOPPED)
@@ -240,7 +240,6 @@ class VMInstance(Thread):
         self._logger.info("Resetting VM...")
         self._qmp.send_command({"execute": "system_reset"})
 
-
     def _is_process_alive(self) -> bool:
         if not self._process:
             return False
@@ -257,7 +256,6 @@ class VMInstance(Thread):
                     self._update_status(VMStatus.STOPPED, s)
                     self._logger.warning("It seems like the QEMU process have crashed, and it went unnoticed")
                     s.commit()
-
 
     def run(self):  # Main event loop
         self._update_status(VMStatus.STOPPED)  # Ensure that it's stopped before performing any commands

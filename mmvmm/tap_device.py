@@ -2,6 +2,8 @@
 import subprocess
 from threading import Lock
 
+from config import Config
+
 
 class TAPDevice:
     """
@@ -19,10 +21,10 @@ class TAPDevice:
         self._masterdevname = master
 
         with TAPDevice._global_network_lock:
-            subprocess.check_call(["ip", "tuntap", "add", "name", self._devname, "mode", "tap"])
-            subprocess.check_call(["ip", "link", "set", self._devname, "master", master])
-            subprocess.check_call(["ip", "link", "set", self._devname, "mtu", mtu])
-            subprocess.check_call(["ip", "link", "set", self._devname, "up"])
+            subprocess.check_call([Config.IP_PATH, "tuntap", "add", "name", self._devname, "mode", "tap"])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "master", master])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "mtu", mtu])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "up"])
 
     @classmethod
     def create_tapdev_name(cls, _id: int) -> str:
@@ -33,7 +35,7 @@ class TAPDevice:
             raise RuntimeError("Device is no longer available")
 
         with TAPDevice._global_network_lock:
-            subprocess.check_call(["ip", "link", "set", self._devname, "master", master])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "master", master])
 
         self._masterdevname = master
 
@@ -60,7 +62,7 @@ class TAPDevice:
             raise RuntimeError("Device is no longer available")
 
         with TAPDevice._global_network_lock:
-            subprocess.check_call(["ip", "link", "set", self._devname, "down"])
-            subprocess.check_call(["ip", "tuntap", "del", "name", self._devname, "mode", "tap"])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "down"])
+            subprocess.check_call([Config.IP_PATH, "tuntap", "del", "name", self._devname, "mode", "tap"])
 
         self._active = False
