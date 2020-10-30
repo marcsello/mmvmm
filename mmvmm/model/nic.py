@@ -11,7 +11,8 @@ class NIC(Base):
     id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
 
     hardware_id = Column(Integer, ForeignKey('hardware.vm_id'))
-    hardware = relationship("Hardware", backref=backref("nic", lazy=True, uselist=True))
+    hardware = relationship("Hardware", backref=backref("nic", lazy=True, uselist=True,
+                                                        cascade="save-update, merge, delete, delete-orphan"))
 
     model = Column(String(15), default='virtio-net', nullable=False)
     mac = Column(String(17), nullable=False)

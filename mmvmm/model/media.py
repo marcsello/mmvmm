@@ -11,7 +11,8 @@ class Media(Base):
     id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
 
     hardware_id = Column(Integer, ForeignKey('hardware.vm_id'))
-    hardware = relationship("Hardware", backref=backref("media", lazy=True, uselist=True))
+    hardware = relationship("Hardware", backref=backref("media", lazy=True, uselist=True,
+                                                        cascade="save-update, merge, delete, delete-orphan"))
 
     type = Column(String(5), nullable=False)  # disk or cdrom
     path = Column(String(4096), nullable=False)  # Only absolute path allowed; limits.h PATH_MAX

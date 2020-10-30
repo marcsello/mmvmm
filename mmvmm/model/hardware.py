@@ -9,7 +9,8 @@ class Hardware(Base):
     __tablename__ = "hardware"
 
     vm_id = Column(Integer, ForeignKey('vm.id'), primary_key=True)
-    vm = relationship("VM", backref=backref("hardware", lazy="joined", uselist=False))
+    vm = relationship("VM", backref=backref("hardware", lazy="joined", uselist=False,
+                                            cascade="save-update, merge, delete, delete-orphan"))
 
     ram_m = Column(Integer, nullable=False)
     cpus = Column(Integer, nullable=False)
