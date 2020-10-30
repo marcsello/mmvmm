@@ -29,7 +29,7 @@ def main():
     vm_manager = VMManager()
 
     try:
-        with UnixStreamXMLRPCServer(Config.CONTROL_SOCKET_PATH) as server:
+        with UnixStreamXMLRPCServer(Config.CONTROL_SOCKET_PATH, log_requests='--debug-requests' in sys.argv) as server:
             server.register_introspection_functions()
             server.register_instance(DaemonControl(vm_manager))
 
