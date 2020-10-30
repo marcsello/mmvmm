@@ -23,7 +23,7 @@ class TAPDevice:
         with TAPDevice._global_network_lock:
             subprocess.check_call([Config.IP_PATH, "tuntap", "add", "name", self._devname, "mode", "tap"])
             subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "master", master])
-            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "mtu", mtu])
+            subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "mtu", str(mtu)])
             subprocess.check_call([Config.IP_PATH, "link", "set", self._devname, "up"])
 
     @classmethod
