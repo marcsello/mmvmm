@@ -151,6 +151,16 @@ class VMInstance(Thread):
         # Called when the QMP negotiation is complete
         self._update_status(VMStatus.RUNNING)
 
+    def _investigate_vm_onlineness(self):
+        # Called when there are problems with the QMP connection
+        s, vm = self._get_session_and_model()
+        if not self.is_process_alive:
+            if vm.status == VMStatus.RUNNING:
+                # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
+                self._update_status(VMStatus.STOPPED, s)
+                self._logger.warning("It seems like the QEMU process is crashed")
+                s.commit()
+
     def _perform_start(self):
         self._enforce_vm_state(False)
         self._update_status(VMStatus.STARTING)
