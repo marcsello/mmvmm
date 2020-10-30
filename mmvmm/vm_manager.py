@@ -7,7 +7,7 @@ from vm_instance import VMInstance
 from exception import UnknownVMError, VMNotRunningError, VMRunningError
 from schema import VMSchema
 
-from model import VM, Session
+from model import VM, VMStatus, Session
 
 
 class VMManager:
@@ -31,8 +31,8 @@ class VMManager:
         """
         at_least_one_powered_on = False
         for vm in self._vm_instances.values():
-            try:
 
+            if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
                 if forced:
                     vm.terminate()
                 else:
@@ -40,8 +40,6 @@ class VMManager:
 
                 self._logger.debug(f"VM {vm.vm_name} is still running...")
                 at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
-            except VMNotRunningError:
-                pass
 
         if at_least_one_powered_on:
             self._logger.warning(
@@ -67,7 +65,7 @@ class VMManager:
 
                     at_least_one_powered_on = False
                     for vm in self._vm_instances.values():
-                        if vm.is_process_alive:
+                        if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
                             at_least_one_powered_on = True
 
         for vm in self._vm_instances.values():
@@ -95,7 +93,6 @@ class VMManager:
         """
         self._logger.debug(f"Loading VM from description: {description}")
         with Session() as s:
-
             new_vm = self.vm_schema.load(description, session=s)
 
             s.add(new_vm)
