@@ -4,6 +4,7 @@ import sys
 import logging
 
 from vm_manager import VMManager
+from model import create_all
 
 
 def main():
@@ -12,6 +13,7 @@ def main():
         level=logging.DEBUG if '--debug' in sys.argv else logging.INFO
     )
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")
+    create_all()
     os.makedirs("/run/mmvmm", mode=0o770, exist_ok=True)
 
     vm_manager = VMManager()

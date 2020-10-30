@@ -6,3 +6,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 Base = declarative_base()
 engine = create_engine('sqlite://', echo=True)
 SessionMaker = sessionmaker(bind=engine)
+
+
+def create_all():
+    Base.metadata.create_all(engine)
