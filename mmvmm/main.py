@@ -2,9 +2,13 @@
 import os
 import sys
 import logging
+import signal
 
 from vm_manager import VMManager
+from control import DaemonControl
 from model import create_all
+
+from xmlrpc_unixsocket import UnixStreamXMLRPCServer
 
 
 def main():
@@ -18,10 +22,31 @@ def main():
 
     vm_manager = VMManager()
 
-    logging.info("MMVMM is ready!")
 
-    if '--no-autostart' not in sys.argv:
-        vm_manager.autostart()
+
+    with UnixStreamXMLRPCServer("/run/mmvmm/control.sock") as server:
+        server.register_introspection_functions()
+        server.register_instance(DaemonControl(vm_manager))
+
+        def signal_handler(signum, frame):
+            logging.warning(f"Signal {signum} recieved. Exiting...")
+            server._BaseServer__shutdown_request = True
+            # this really is the cleanest solution...
+            # shutdown() would block until the server exists... but this would cause a dead-lock
+
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        logging.info("MMVMM is ready!")
+
+        if '--no-autostart' not in sys.argv:
+            vm_manager.autostart()
+
+        server.serve_forever()
+
+    os.remove("/run/mmvmm/control.sock")
+
+    logging.info("Stopping MMVMM...")
+    vm_manager.close()
 
 
 if __name__ == "__main__":
