@@ -23,6 +23,7 @@ class VMManager:
 
         for vm in vms:
             self._vm_instances[vm.id] = VMInstance(vm.id)
+            self._vm_instances[vm.id].start_eventloop()
 
     def close(self, forced: bool = False, timeout: int = 60):
         """
@@ -67,8 +68,13 @@ class VMManager:
 
                     at_least_one_powered_on = False
                     for vm in self._vm_instances.values():
-                        if vm.is_running():
+                        if vm.is_process_alive():
                             at_least_one_powered_on = True
+
+        for vm in self._vm_instances.values():
+            # The request to stop event loops arrives after the terminate request
+            # So if the terminate could not kill the vm there's no hope
+            vm.stop_eventloop()
 
         self._vm_instances = {}
 
@@ -97,6 +103,7 @@ class VMManager:
         s.commit()
 
         self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
+        self._vm_instances[new_vm.id].start_eventloop()
         self._logger.info(f"New virtual machine created: {new_vm.name} with id: {new_vm.id}")
 
     def delete(self, name: str):
@@ -110,9 +117,10 @@ class VMManager:
         if not vm:
             raise UnknownVMError()
 
-        if vm.is_running:
+        if vm.is_process_alive:
             raise VMRunningError()
 
+        self._vm_instances[vm.id].stop_eventloop()
         old_name = vm.name
 
         s.delete(vm)

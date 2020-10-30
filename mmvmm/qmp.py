@@ -16,7 +16,7 @@ from utils import JSONSocketWrapper
 
 class QMPMonitor(Thread):
 
-    def __init__(self, upper_level_logger: logging.Logger):
+    def __init__(self, upper_level_logger: logging.Logger, vm_command_queue: queue.Queue):
         self._logger = upper_level_logger.getChild('qmp')
         Thread.__init__(self)
 
@@ -179,13 +179,5 @@ class QMPMonitor(Thread):
             try:
                 return self._response_queue.get(timeout=_timeout)
 
-            except Queue.Empty:  # there was no response
+            except queue.Empty:  # there was no response
                 return None
-
-    def register_event_listener(self, event: str, listener: callable):  # Event handlers should return quickly, not to halt the thread
-        """
-        Register callable objects to be called when a QMP event occours. 
-        
-        Events are called from the reciever thread, so they should not be long-running
-        """
-        self._event_listeners[event] = listener

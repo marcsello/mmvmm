@@ -59,7 +59,7 @@ class DaemonControl(DaemonControlBase):
 
     @_vm_mapped
     def is_running(self, vm: VMInstance):
-        return vm.is_running
+        return vm.is_process_alive
 
     @_vm_mapped
     def info(self, vm: VMInstance):
