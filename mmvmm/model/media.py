@@ -10,7 +10,7 @@ class Media(Base):
 
     id = Column(Integer, nullable=False, primary_key=True, autoincrement=True)
 
-    hardware_id = Column(Integer, ForeignKey('hardware.id'))
+    hardware_id = Column(Integer, ForeignKey('hardware.vm_id'))
     hardware = relationship("Hardware", backref=backref("media", lazy=True, uselist=True))
 
     type = Column(String(5), nullable=False)  # disk or cdrom

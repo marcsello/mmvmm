@@ -7,7 +7,7 @@ from marshmallow_enum import EnumField
 
 from model import VM, VMStatus
 
-from . import HardwareSchema
+from .hardware_schema import HardwareSchema
 
 
 class VMSchema(ModelSchema):

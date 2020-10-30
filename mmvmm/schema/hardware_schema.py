@@ -6,7 +6,8 @@ from marshmallow import RAISE
 
 from model import Hardware
 
-from . import NICSchema, MediaSchema
+from .nic_schema import NICSchema
+from .media_schema import MediaSchema
 
 
 class HardwareSchema(ModelSchema):
