@@ -24,9 +24,12 @@ from vm_commands import VMTerminateCommand, VMPoweroffCommand, VMResetCommand, V
 
 class VMInstance(Thread):
     vm_schema = VMSchema(many=False, dump_only=['status', 'since', 'pid'])
-    hardware_schema = HardwareSchema(many=False, dump_only=['vm', 'vm_id', 'nic', 'media'])
-    nic_schema = NICSchema(many=False, dump_only=['hardware', 'hardware_id'])
-    media_schema = MediaSchema(many=False, dump_only=['hardware', 'hardware_id'])
+
+    # This schema is used for changing generic hardware stuff only
+    hardware_schema = HardwareSchema(many=False, dump_only=['nic', 'media'])
+
+    nic_schema = NICSchema(many=False)
+    media_schema = MediaSchema(many=False)
 
     def __init__(self, _id: int):
         super().__init__()

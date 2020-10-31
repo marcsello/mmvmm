@@ -15,5 +15,6 @@ class NICSchema(ModelSchema):
     mtu = fields.Integer(validate=Range(min_inclusive=True, min=1), allow_none=False, default=1500, missing=1500)
 
     class Meta:
+        exclude = ['hardware', 'hardware_id']
         model = NIC
         unknown = RAISE

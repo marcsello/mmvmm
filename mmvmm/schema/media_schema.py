@@ -14,5 +14,6 @@ class MediaSchema(ModelSchema):
     interface = fields.Str(validate=OneOf(['virtio', 'floppy', 'ide']))
 
     class Meta:
+        exclude = ['hardware', 'hardware_id']
         model = Media
         unknown = RAISE

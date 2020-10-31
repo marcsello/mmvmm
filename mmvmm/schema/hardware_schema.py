@@ -33,5 +33,6 @@ class HardwareSchema(ModelSchema):
         return data
 
     class Meta:
+        exclude = ['vm', 'vm_id']  # Do not allow to change it, and there is no point showing it either
         model = Hardware
         unknown = RAISE
