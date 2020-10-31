@@ -16,6 +16,11 @@ class VMSchema(ModelSchema):
 
     status = EnumField(VMStatus)
 
+    vnc_port = fields.Method("get_vnc_port", dump_only=True)
+
+    def get_vnc_port(self, vm) -> str:
+        return f":{vm.id}"
+
     @pre_load
     def set_nested_session(self, data, **kwargs):
         """Allow nested schemas to use the parent schema's session. This is a
@@ -30,10 +35,7 @@ class VMSchema(ModelSchema):
 
         return data
 
-
     class Meta:
         model = VM
         unknown = RAISE
         exclude = ['id']  # Id is used internally only and should not be exposed
-
-
