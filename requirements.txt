@@ -3,3 +3,4 @@ marshmallow
 marshmallow-sqlalchemy
 marshmallow-enum
 bettersocket
+python-pidfile

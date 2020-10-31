@@ -4,6 +4,8 @@ import sys
 import logging
 import signal
 
+import pidfile
+
 from config import Config
 
 from vm_manager import VMManager
@@ -23,8 +25,6 @@ def main():
 
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")
     create_all()
-    os.makedirs(Config.SOCKET_DIR, mode=0o770, exist_ok=True)
-    os.makedirs(Config.QMP_SOCKETS_DIR, mode=0o770, exist_ok=True)
 
     vm_manager = VMManager()
 
@@ -60,4 +60,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    os.makedirs(Config.RUN_DIR, mode=0o770, exist_ok=True)
+    os.makedirs(Config.QMP_SOCKETS_DIR, mode=0o770, exist_ok=True)
+    with pidfile.PIDFile(Config.PIDFILE_PATH):
+        main()
