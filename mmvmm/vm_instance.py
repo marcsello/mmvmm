@@ -139,7 +139,7 @@ class VMInstance(Thread):
             args += ['base=localtime']
 
         # product_uuid saved in SMBIOS
-        args += ['-uuid', vm.hardware.product_uuid]
+        args += ['-uuid', str(vm.hardware.product_uuid)]
 
         # add media
         for media in vm.hardware.media:
