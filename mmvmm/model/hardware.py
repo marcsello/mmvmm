@@ -17,7 +17,7 @@ class Hardware(Base):
     vm = relationship("VM", backref=backref("hardware", lazy="joined", uselist=False,
                                             cascade="save-update, merge, delete, delete-orphan"))
 
-    product_uuid = Column(String(36), nullable=False, default=generate_uuid)
+    product_uuid = Column(String(36), nullable=False, unique=True, default=generate_uuid)
 
     ram_m = Column(Integer, nullable=False)
     cpus = Column(Integer, nullable=False)
