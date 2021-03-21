@@ -92,7 +92,11 @@ class VMInstance(Thread):
 
         self._logger.debug("Cleaning up...")
         for tapdev in self._tapdevs:
-            tapdev.free()
+            try:
+                tapdev.free()
+            except (subprocess.CalledProcessError, RuntimeError) as e:
+                self._logger.error(f"Failed to free up tap device {tapdev.device}: {e}")
+                # We decide to ignore this at the moment. The next startup of the VM may fail trough...
 
         self._tapdevs = []
         self._qmp.disconnect(cleanup=qmp_cleanup)
@@ -192,8 +196,8 @@ class VMInstance(Thread):
             for nic in vm.hardware.nic:
                 try:
                     tapdev = TAPDevice(nic.id, nic.master, nic.mtu)
-                except subprocess.CalledProcessError as e:
-                    self._logger.error(f"Could not create TAP device: {e}! Aborting VM startup...")
+                except (subprocess.CalledProcessError, RuntimeError) as e:
+                    self._logger.error(f"Could not create TAP device {nic.id}: {e}! Aborting VM startup...")
                     self._update_status(VMStatus.STOPPED)
                     return
 
