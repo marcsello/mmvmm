@@ -237,11 +237,12 @@ class VMInstance(Thread):
         self._enforce_vm_state(True)
         self._update_status(VMStatus.STOPPING)
 
-        self._logger.warning("VM is being terminated...")
         if kill:
+            self._logger.warning("VM is being killed!")
             self._process.kill()
             self._poweroff_cleanup(True)  # Sets the state in the db
         else:
+            self._logger.warning("VM is being terminated...")
             self._process.terminate()
             # Poweroff cleanup will be triggered by QMP event
 

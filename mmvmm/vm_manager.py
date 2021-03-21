@@ -33,13 +33,14 @@ class VMManager:
         for vm in self._vm_instances.values():
 
             if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
+                self._logger.debug(f"VM {vm.vm_name} is running. Terminating {'forcefully' if forced else 'gracefully'}")
+
                 if forced:
                     vm.terminate()
                 else:
                     vm.poweroff()
 
-                self._logger.debug(f"VM {vm.vm_name} is still running...")
-                at_least_one_powered_on = True  # Will be called if the above functions not raised an error, meaning that there is a runnning VM
+                at_least_one_powered_on = True
 
         if at_least_one_powered_on:
             self._logger.warning(
@@ -52,7 +53,7 @@ class VMManager:
                 time.sleep(1)
 
                 if (time.time() - wait_started) > timeout:
-                    self._logger.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
+                    self._logger.warning("Waiting for shutdown time expired. Killing VMs...")
                     for vm in self._vm_instances.values():
 
                         if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
