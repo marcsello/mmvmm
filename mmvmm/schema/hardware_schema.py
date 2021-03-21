@@ -15,6 +15,8 @@ class HardwareSchema(ModelSchema):
     ram_m = fields.Int(validate=Range(min=1), required=True)  # MByte
     boot = fields.Str(validate=OneOf(['c', 'n', 'd']), default='d', missing='d')
 
+    product_uuid = fields.UUID()
+
     nic = fields.Nested(NICSchema, many=True, required=True)
     media = fields.Nested(MediaSchema, many=True, required=True)
 

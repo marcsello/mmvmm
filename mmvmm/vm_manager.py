@@ -33,7 +33,8 @@ class VMManager:
         for vm in self._vm_instances.values():
 
             if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
-                self._logger.debug(f"VM {vm.vm_name} is running. Terminating {'forcefully' if forced else 'gracefully'}")
+                self._logger.debug(
+                    f"VM {vm.vm_name} is running. Terminating {'forcefully' if forced else 'gracefully'}")
 
                 if forced:
                     vm.terminate()
@@ -100,7 +101,9 @@ class VMManager:
 
             self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
             self._vm_instances[new_vm.id].start_eventloop()
-            self._logger.info(f"New virtual machine created: {new_vm.name} with id: {new_vm.id}")
+            self._logger.info(
+                f"New virtual machine created: {new_vm.name} (hardware.product_uuid: {new_vm.hardware.product_uuid})"
+            )
 
     def delete(self, name: str):
         """
