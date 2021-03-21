@@ -101,9 +101,8 @@ class VMManager:
 
             self._vm_instances[new_vm.id] = VMInstance(new_vm.id)
             self._vm_instances[new_vm.id].start_eventloop()
-            self._logger.info(
-                f"New virtual machine created: {new_vm.name} (hardware.product_uuid: {new_vm.hardware.product_uuid})"
-            )
+            # can not display uuid, because it would require a session to lazy load the hardware info
+            self._logger.info(f"New virtual machine created: {new_vm.name}")
 
     def delete(self, name: str):
         """
