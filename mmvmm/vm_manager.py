@@ -55,12 +55,11 @@ class VMManager:
                     self._logger.warning("Waiting for shutdown time expired. Killing VMs forcefully...")
                     for vm in self._vm_instances.values():
 
-                        try:
+                        if vm.status not in [VMStatus.STOPPED, VMStatus.NEW]:
+                            # We can't just kill all then ignore the VMNotRunningError anymore because of the event loop
                             vm.terminate(kill=True)
-                        except VMNotRunningError:
-                            pass
 
-                    break
+                    break  # exit the while at_least_powered_on
                 else:
 
                     at_least_one_powered_on = False
