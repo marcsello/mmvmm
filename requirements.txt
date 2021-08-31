@@ -1,8 +1,8 @@
-sqlalchemy
-sqlalchemy-utils
-marshmallow
-marshmallow-sqlalchemy
-marshmallow-enum
-bettersocket
-python-pidfile
-apscheduler
+sqlalchemy~=1.4.23
+sqlalchemy-utils~=0.37.8
+marshmallow~=3.13.0
+marshmallow-sqlalchemy~=0.26.1
+marshmallow-enum~=1.5.1
+bettersocket>=0.1.1
+python-pidfile~=3.0.0
+apscheduler~=3.7.0
