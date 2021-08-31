@@ -22,6 +22,14 @@ def main():
     )
     if '--debug-sqlalchemy' in sys.argv:
         logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+    if '--debug-scheduler' in sys.argv:
+        logging.getLogger('apscheduler.executors.default').setLevel(logging.DEBUG)
+        logging.getLogger('apscheduler.scheduler').setLevel(logging.DEBUG)
+        logging.getLogger('apscheduler').setLevel(logging.DEBUG)
+    else:
+        logging.getLogger('apscheduler.executors.default').setLevel(logging.WARNING)
+        logging.getLogger('apscheduler.scheduler').setLevel(logging.WARNING)
+        logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
     logging.info("Starting Marcsello's Magical Virtual Machine Manager...")
     create_all()
