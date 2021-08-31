@@ -237,12 +237,16 @@ class VMInstance(Thread):
 
             except FileNotFoundError as e:
                 self._logger.error(f"Could not launch VM: {e}")
+                self._cleanup_tapdevs()
+                self._qmp = None
                 self._update_status(VMStatus.STOPPED)
                 return
 
             except Exception as e:
                 self._logger.error(f"Unexpected error happened: {e}")
                 self._logger.exception(e)
+                self._cleanup_tapdevs()
+                self._qmp = None
                 self._update_status(VMStatus.STOPPED)
                 return
 
@@ -253,11 +257,15 @@ class VMInstance(Thread):
                 pass  # all good
             else:  # it did exit
                 self._logger.error(f"VM crashed/exited 1 second after startup! Exit code: {self._process.returncode}")
+                self._cleanup_tapdevs()
+                self._qmp = None
                 self._update_status(VMStatus.STOPPED)
                 return
 
             if not self._is_process_alive():
                 self._logger.error(f"The VM process is... dead?! Exit code: {self._process.returncode}")
+                self._cleanup_tapdevs()
+                self._qmp = None
                 self._update_status(VMStatus.STOPPED)
                 return
 
