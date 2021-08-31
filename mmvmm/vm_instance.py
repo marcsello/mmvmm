@@ -355,6 +355,11 @@ class VMInstance(Thread):
 
         self._logger.debug("Event loop exited!")
 
+    def event_loop_autorestart(self): # This will be called from a separate thread, background scheduler, thing..
+        if not self.is_alive():
+            self._logger.warning("The event loop seems to be crashed. Restarting ...")
+            self.start_eventloop()
+
     def start(self):
         self._command_queue.put(VMStartCommand())
 
