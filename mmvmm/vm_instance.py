@@ -212,13 +212,37 @@ class VMInstance(Thread):
             try:
                 # start the qemu process itself
                 self._process = subprocess.Popen(qemu_command, preexec_fn=self._preexec)
+
             except FileNotFoundError as e:
                 self._logger.error(f"Could not launch VM: {e}")
                 self._update_status(VMStatus.STOPPED)
                 return
 
+            except Exception as e:
+                self._logger.error(f"Unexpected error happened: {e}")
+                self._logger.exception(e)
+                self._update_status(VMStatus.STOPPED)
+                return
+
+            # Let's see if it crashes immediately
+            try:
+                self._process.wait(timeout=1)  # 1 sec
+            except subprocess.TimeoutExpired:
+                pass  # all good
+            else:  # it did exit
+                self._logger.error(f"VM crashed/exited 1 second after startup! Exit code: {self._process.returncode}")
+                self._update_status(VMStatus.STOPPED)
+                return
+
+            if not self._is_process_alive():
+                self._logger.error(f"The VM process is... dead?! Exit code: {self._process.returncode}")
+                self._update_status(VMStatus.STOPPED)
+                return
+
             vm.pid = self._process.pid
+            logging.debug("VM seems to be started. Starting QMP Monitor...")
             self._qmp.start()  # Start the QMP monitor (A negotiation event will mark the VM running)
+
             s.add(vm)
             s.commit()
 
