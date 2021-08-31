@@ -73,6 +73,17 @@ class VMInstance(Thread):
     def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
         os.setpgrp()
 
+    def _cleanup_tapdevs(self):
+        self._logger.debug("Freeing all tapdevs...")
+        for tapdev in self._tapdevs:
+            try:
+                tapdev.free()
+            except (subprocess.CalledProcessError, RuntimeError) as e:
+                self._logger.error(f"Failed to free up tap device {tapdev.device}: {e}")
+                # We decide to ignore this at the moment. The next startup of the VM may fail trough...
+
+        self._tapdevs = []
+
     def _poweroff_cleanup(self, qmp_cleanup: bool = False, timeout: int = 5):
         """
         Ideally this is called after a SHUTDOWN event is recieved from the QMP
@@ -92,14 +103,7 @@ class VMInstance(Thread):
                     break
 
         self._logger.debug("Cleaning up...")
-        for tapdev in self._tapdevs:
-            try:
-                tapdev.free()
-            except (subprocess.CalledProcessError, RuntimeError) as e:
-                self._logger.error(f"Failed to free up tap device {tapdev.device}: {e}")
-                # We decide to ignore this at the moment. The next startup of the VM may fail trough...
-
-        self._tapdevs = []
+        self._cleanup_tapdevs()
         self._qmp.disconnect(cleanup=qmp_cleanup)
         self._qmp = None
         self._update_status(VMStatus.STOPPED)
@@ -189,6 +193,9 @@ class VMInstance(Thread):
                 self._logger.warning("Closing a zombie QMP Monitor... (maybe the VM was still running?)")
                 self._qmp.disconnect(cleanup=True)
                 self._qmp.join()
+
+            # This should be clean already, but let's clean it anyway. A crashed startup may leave some tapdevs behind.
+            self._cleanup_tapdevs()
 
             # Create QMP monitor
             self._qmp = QMPMonitor(self._logger, self._command_queue)
