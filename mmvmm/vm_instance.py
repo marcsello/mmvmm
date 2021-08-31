@@ -69,6 +69,21 @@ class VMInstance(Thread):
                 s.add(vm)
                 s.commit()
 
+    def _flag_funky(self, funkyness: bool = True, session=None):
+        if session:
+            vm = session.query(VM).get(self._id)
+            vm.funky = funkyness
+            session.add(vm)
+        else:
+            with Session() as s:
+                vm = s.query(VM).get(self._id)
+                vm.funky = funkyness
+                s.add(vm)
+                s.commit()
+
+        if funkyness:
+            self._logger.warning("The VM is in funky state now, proceed at your own risk!")
+
     @staticmethod
     def _preexec():  # do not forward signals (Like. SIGINT, SIGTERM)
         os.setpgrp()
@@ -300,11 +315,14 @@ class VMInstance(Thread):
                 if vm.status == VMStatus.RUNNING:
                     # It might be expected for the process to not exists in NEW, STARTING, STOPPING and STOPPED state
                     self._update_status(VMStatus.STOPPED, s)
-                    self._logger.warning("It seems like the QEMU process have crashed, and it went unnoticed")
+                    self._logger.warning(
+                        "It seems like the QEMU process have crashed, and it went unnoticed; The VM is in funky state now, proceed at your own risk!"
+                    )
                     s.commit()
 
     def run(self):  # Main event loop
         self._update_status(VMStatus.STOPPED)  # Ensure that it's stopped before performing any commands
+        self._flag_funky(False)
         self._logger.debug("Event loop ready!")
         while True:
             try:
@@ -321,6 +339,11 @@ class VMInstance(Thread):
                         cmd.execute(self)
                     except VMError as e:
                         self._logger.error(str(e))
+                    except Exception as e:  # The event loop must not crash!
+                        self._logger.error(
+                            f"Some error happened during the execution of a VM command: {e}  ; The VM is in funky state now, proceed at your own risk!"
+                        )
+                        self._flag_funky()
 
         self._logger.debug("Event loop exited!")
 
@@ -414,6 +437,12 @@ class VMInstance(Thread):
         with Session() as s:
             vm = s.query(VM).get(self._id)
             return vm.status
+
+    @property
+    def funky(self) -> bool:
+        with Session() as s:
+            vm = s.query(VM).get(self._id)
+            return vm.funky
 
     @property
     def id(self) -> int:
