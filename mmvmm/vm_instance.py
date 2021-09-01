@@ -69,7 +69,7 @@ class VMInstance(Thread):
                 s.add(vm)
                 s.commit()
 
-    def _flag_funky(self, funkyness: bool = True, session=None):
+    def flag_funky(self, funkyness: bool = True, session=None):
         if session:
             vm = session.query(VM).get(self._id)
             vm.funky = funkyness
@@ -330,7 +330,6 @@ class VMInstance(Thread):
 
     def run(self):  # Main event loop
         self._update_status(VMStatus.STOPPED)  # Ensure that it's stopped before performing any commands
-        self._flag_funky(False)
         self._logger.debug("Event loop ready!")
         while True:
             try:
@@ -354,11 +353,6 @@ class VMInstance(Thread):
                         self._flag_funky()
 
         self._logger.debug("Event loop exited!")
-
-    def event_loop_autorestart(self): # This will be called from a separate thread, background scheduler, thing..
-        if not self.is_alive():
-            self._logger.warning("The event loop seems to be crashed. Restarting ...")
-            self.start_eventloop()
 
     def start(self):
         self._command_queue.put(VMStartCommand())

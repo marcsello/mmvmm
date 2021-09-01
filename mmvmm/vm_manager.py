@@ -39,8 +39,29 @@ class VMManager:
 
     def _run_periodic_tasks(self):
         with self._vm_instances_lock:
+            vms_to_respawn = []
             for vm_id, vm_instance in self._vm_instances.items():
-                vm_instance.event_loop_autorestart()
+                if not vm_instance.is_alive():
+                    self._logger.warning(
+                        f"The event loop of vm {vm_instance.name} seems to be crashed. Respawning VM instance and marking it funky"
+                    )
+                    vms_to_respawn.append(vm_id)
+                    if vm_instance.is_process_alive:
+                        # more ebbül baj lesz...
+                        try:
+                            vm_instance._perform_terminate(True)
+                        except Exception as e:
+                            self._logger.error(f"Error terminating QEMU process while breaking the law: {e}")
+                            self._logger.exception(e)
+
+                    vm_instance.flag_funky()
+
+            for vm_id in vms_to_respawn:
+                vm_instance = VMInstance(vm_id)
+                vm_instance.start_eventloop()
+                vm_instance.flag_funky()
+
+                self._vm_instances[vm_id] = vm_instance
 
     def close(self, forced: bool = False, timeout: int = 60):
         """
